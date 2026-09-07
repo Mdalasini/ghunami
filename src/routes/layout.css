@@ -1,1 +1,47 @@
 @import 'tailwindcss';
+
+@theme {
+	--font-display: 'Syne', sans-serif;
+	--font-body: 'Source Serif 4', serif;
+	--font-ui: 'IBM Plex Sans', sans-serif;
+	--color-ink: #141a22;
+	--color-paper: #e6ebf0;
+	--color-card: #f7f9fb;
+	--color-accent: #2451e6;
+	--color-accent-ink: #0d1f6b;
+	--color-coin: #c9842a;
+	--color-mute: #5b6573;
+	--color-line: #c5ced8;
+}
+
+html,
+body {
+	min-height: 100%;
+	background: var(--color-paper);
+	color: var(--color-ink);
+	font-family: var(--font-body);
+}
+
+body {
+	margin: 0;
+}
+
+button,
+input,
+textarea {
+	font: inherit;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
