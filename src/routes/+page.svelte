@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resetDraft } from '$lib/create/draft.svelte';
+	import logo from '$lib/assets/logo.svg';
 
 	function start(event: MouseEvent) {
 		event.preventDefault();
@@ -15,7 +16,9 @@
 
 <div class="min-h-dvh px-6 py-8 md:px-12">
 	<header class="flex items-center justify-between">
-		<a href="/" class="font-display text-xl font-bold tracking-tight">ghunami</a>
+		<a href="/" aria-label="ghunami — home">
+			<img src={logo} alt="ghunami" class="h-8 w-auto" />
+		</a>
 		<a
 			href="/create"
 			onclick={start}

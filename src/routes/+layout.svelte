@@ -6,11 +6,11 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/svg+xml" href={favicon} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link
-		href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Syne:wght@600;700;800&display=swap"
+		href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Nunito:wght@700;800;900&display=swap"
 		rel="stylesheet"
 	/>
 </svelte:head>

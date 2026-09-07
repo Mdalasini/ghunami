@@ -1,9 +1,9 @@
 @import 'tailwindcss';
 
 @theme {
-	--font-display: 'Syne', sans-serif;
-	--font-body: 'Source Serif 4', serif;
-	--font-ui: 'IBM Plex Sans', sans-serif;
+	--font-display: 'Nunito', ui-rounded, system-ui, sans-serif;
+	--font-body: 'Hanken Grotesk', system-ui, sans-serif;
+	--font-ui: 'Hanken Grotesk', system-ui, sans-serif;
 	--color-ink: #141a22;
 	--color-paper: #e6ebf0;
 	--color-card: #f7f9fb;
@@ -12,6 +12,7 @@
 	--color-coin: #c9842a;
 	--color-mute: #5b6573;
 	--color-line: #c5ced8;
+	--color-sun: #ffe8a3;
 }
 
 html,
@@ -30,6 +31,21 @@ button,
 input,
 textarea {
 	font: inherit;
+}
+
+::selection {
+	background: var(--color-sun);
+	color: #000;
+}
+
+input,
+textarea {
+	caret-color: var(--color-accent);
+}
+
+::placeholder {
+	color: var(--color-mute);
+	opacity: 1;
 }
 
 :focus-visible {
