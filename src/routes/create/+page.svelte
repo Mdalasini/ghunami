@@ -287,18 +287,20 @@
 					<p class="mt-4 whitespace-pre-wrap text-mute">{draft.story}</p>
 				</article>
 			{:else if step === 1}
-				<label class="font-ui text-sm font-medium text-mute" for="goal">Goal</label>
-				<div class="mt-2 flex items-end gap-3 border-b border-line pb-2">
-					<span class="font-display pb-1 text-3xl font-extrabold text-coin">Ksh</span>
-					<input
-						id="goal"
-						class="font-display w-full bg-transparent text-6xl font-extrabold tracking-tight outline-none"
-						inputmode="numeric"
-						autocomplete="off"
-						placeholder="0"
-						value={goalText}
-						oninput={(e) => parseGoal(e.currentTarget.value)}
-					/>
+				<div>
+					<label class="font-ui text-sm font-medium text-mute" for="goal">Goal</label>
+					<div class="field-solid-affix">
+						<span class="font-display text-3xl font-extrabold text-coin" aria-hidden="true">Ksh</span>
+						<input
+							id="goal"
+							class="font-display w-full border-0 bg-transparent p-0 text-6xl font-extrabold tracking-tight focus:ring-0"
+							inputmode="numeric"
+							autocomplete="off"
+							placeholder="0"
+							value={goalText}
+							oninput={(e) => parseGoal(e.currentTarget.value)}
+						/>
+					</div>
 				</div>
 				<div class="mt-6 flex flex-wrap gap-2">
 					{#each SUGGESTED as amount (amount)}
@@ -356,23 +358,27 @@
 				{/if}
 				<div class="mt-6">{@render photoTip()}</div>
 			{:else if step === 3}
-				<label class="font-ui text-sm font-medium text-mute" for="title">Title</label>
-				<input
-					id="title"
-					class="mt-2 w-full border-b border-line bg-transparent py-2 text-2xl outline-none"
-					maxlength="80"
-					placeholder="Donate to help..."
-					bind:value={draft.title}
-				/>
+				<label class="block" for="title">
+					<span class="font-ui text-sm font-medium text-mute">Title</span>
+					<input
+						id="title"
+						class="field-solid text-2xl"
+						maxlength="80"
+						placeholder="Donate to help..."
+						bind:value={draft.title}
+					/>
+				</label>
 				<div class="mt-5">{@render titleTip()}</div>
-				<label class="font-ui mt-8 block text-sm font-medium text-mute" for="story">Story</label>
-				<textarea
-					id="story"
-					class="mt-2 min-h-48 w-full resize-y rounded-2xl border border-line bg-white p-4 outline-none"
-					maxlength="4000"
-					placeholder="Who this is for, what happened, and how the money will be used."
-					bind:value={draft.story}
-				></textarea>
+				<label class="mt-8 block" for="story">
+					<span class="font-ui text-sm font-medium text-mute">Story</span>
+					<textarea
+						id="story"
+						class="field-solid min-h-48 resize-none"
+						maxlength="4000"
+						placeholder="Who this is for, what happened, and how the money will be used."
+						bind:value={draft.story}
+					></textarea>
+				</label>
 				<p class="font-ui mt-2 text-right text-xs text-mute">{draft.story.length} / 4000</p>
 				<div class="mt-5">{@render storyTips()}</div>
 			{:else}
@@ -512,24 +518,27 @@
 
 		<div class="mt-6">
 			{#if editing === 'goal'}
-				<div class="flex items-end gap-2 border-b border-line pb-2">
-					<span class="font-display pb-0.5 text-2xl font-extrabold text-coin">Ksh</span>
-					<input
-						bind:this={editGoalInput}
-						aria-label="Goal amount"
-						class="font-display w-full bg-transparent text-4xl font-extrabold tracking-tight outline-none"
-						inputmode="numeric"
-						autocomplete="off"
-						placeholder="0"
-						value={editGoalText}
-						oninput={(e) => parseEditGoal(e.currentTarget.value)}
-						onkeydown={(e) => {
-							if (e.key === 'Enter') {
-								e.preventDefault();
-								saveEdit();
-							}
-						}}
-					/>
+				<div>
+					<label class="font-ui text-sm font-medium text-mute" for="edit-goal">Goal</label>
+					<div class="field-solid-affix">
+						<span class="font-display text-2xl font-extrabold text-coin" aria-hidden="true">Ksh</span>
+						<input
+							id="edit-goal"
+							bind:this={editGoalInput}
+							class="font-display w-full border-0 bg-transparent p-0 text-4xl font-extrabold tracking-tight focus:ring-0"
+							inputmode="numeric"
+							autocomplete="off"
+							placeholder="0"
+							value={editGoalText}
+							oninput={(e) => parseEditGoal(e.currentTarget.value)}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') {
+									e.preventDefault();
+									saveEdit();
+								}
+							}}
+						/>
+					</div>
 				</div>
 				<div class="mt-4 flex flex-wrap gap-2">
 					{#each SUGGESTED as amount (amount)}
@@ -580,30 +589,36 @@
 				{/if}
 				<div class="mt-5">{@render photoTip()}</div>
 			{:else if editing === 'title'}
-				<input
-					bind:this={editTitleInput}
-					aria-label="Title"
-					class="w-full border-b border-line bg-transparent py-2 text-xl outline-none"
-					maxlength="80"
-					placeholder="Donate to help..."
-					bind:value={editTitle}
-					onkeydown={(e) => {
-						if (e.key === 'Enter') {
-							e.preventDefault();
-							saveEdit();
-						}
-					}}
-				/>
+				<label class="block">
+					<span class="font-ui text-sm font-medium text-mute">Title</span>
+					<input
+						bind:this={editTitleInput}
+						aria-label="Title"
+						class="field-solid text-xl"
+						maxlength="80"
+						placeholder="Donate to help..."
+						bind:value={editTitle}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault();
+								saveEdit();
+							}
+						}}
+					/>
+				</label>
 				<div class="mt-4">{@render titleTip()}</div>
 			{:else if editing === 'story'}
-				<textarea
-					bind:this={editStoryArea}
-					aria-label="Story"
-					class="min-h-40 w-full resize-y rounded-2xl border border-line bg-white p-4 outline-none"
-					maxlength="4000"
-					placeholder="Who this is for, what happened, and how the money will be used."
-					bind:value={editStory}
-				></textarea>
+				<label class="block">
+					<span class="font-ui text-sm font-medium text-mute">Story</span>
+					<textarea
+						bind:this={editStoryArea}
+						aria-label="Story"
+						class="field-solid min-h-40 resize-none"
+						maxlength="4000"
+						placeholder="Who this is for, what happened, and how the money will be used."
+						bind:value={editStory}
+					></textarea>
+				</label>
 				<p class="font-ui mt-2 text-right text-xs text-mute">{editStory.length} / 4000</p>
 				<div class="mt-4">{@render storyTips()}</div>
 			{/if}

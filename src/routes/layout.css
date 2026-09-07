@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@plugin '@tailwindcss/forms';
 
 @theme {
 	--font-display: 'Nunito', ui-rounded, system-ui, sans-serif;
@@ -56,7 +57,29 @@ textarea {
 	opacity: 1;
 }
 
-:focus-visible {
+@utility field-solid {
+	@apply mt-1 block w-full rounded-md border-transparent bg-paper;
+}
+
+@utility field-solid-affix {
+	@apply mt-1 flex items-baseline gap-2 rounded-md border border-transparent bg-paper px-3 py-2;
+}
+
+.field-solid:focus {
+	border-color: var(--color-slate);
+	background-color: #fff;
+	--tw-ring-inset: ;
+	--tw-ring-offset-width: 0px;
+	--tw-ring-shadow: 0 0 #0000;
+	box-shadow: none;
+}
+
+.field-solid-affix:focus-within {
+	border-color: var(--color-slate);
+	background-color: #fff;
+}
+
+:focus-visible:not(input):not(textarea):not(select) {
 	outline: 2px solid var(--color-ink);
 	outline-offset: 3px;
 }
