@@ -22,7 +22,7 @@
 		<a
 			href="/create"
 			onclick={start}
-			class="font-ui rounded-full border border-ink/15 px-4 py-2 text-sm font-medium"
+			class="font-ui rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-sun"
 		>
 			Start a fundraiser
 		</a>
@@ -40,7 +40,7 @@
 		<a
 			href="/create"
 			onclick={start}
-			class="font-ui mt-10 rounded-full bg-accent px-8 py-3.5 text-sm font-semibold text-white"
+			class="font-ui mt-10 rounded-full bg-accent px-8 py-3.5 text-sm font-semibold text-ink hover:bg-accent-deep hover:text-card"
 		>
 			Start a fundraiser
 		</a>

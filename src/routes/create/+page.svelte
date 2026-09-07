@@ -253,7 +253,7 @@
 
 	{#if !done}
 		<div class="mx-6 h-1 overflow-hidden rounded-full bg-line/50 md:mx-10" aria-hidden="true">
-			<div class="h-full bg-accent" style="width: {(step / STEPS.length) * 100}%"></div>
+			<div class="h-full bg-accent-deep" style="width: {(step / STEPS.length) * 100}%"></div>
 		</div>
 	{/if}
 
@@ -305,7 +305,7 @@
 						<button
 							type="button"
 							class="font-ui rounded-full border px-4 py-2 text-sm {draft.goal === amount
-								? 'border-accent bg-accent text-white'
+								? 'border-accent bg-accent text-ink'
 								: 'border-line bg-white'}"
 							onclick={() => pickSuggested(amount)}
 						>
@@ -361,7 +361,7 @@
 					id="title"
 					class="mt-2 w-full border-b border-line bg-transparent py-2 text-2xl outline-none"
 					maxlength="80"
-					placeholder="Help Maya get home"
+					placeholder="Donate to help..."
 					bind:value={draft.title}
 				/>
 				<div class="mt-5">{@render titleTip()}</div>
@@ -454,7 +454,7 @@
 			</button>
 			<a
 				href="/create"
-				class="font-ui rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white"
+				class="font-ui rounded-full bg-accent px-6 py-3 text-sm font-semibold text-ink hover:bg-accent-deep hover:text-card"
 				onclick={startOver}
 			>
 				Start another
@@ -468,7 +468,7 @@
 			<button
 				type="button"
 				class="font-ui rounded-full px-6 py-3 text-sm font-semibold {canContinue
-					? 'bg-accent text-white'
+					? 'bg-accent text-ink hover:bg-accent-deep hover:text-card'
 					: 'cursor-not-allowed bg-line text-mute'}"
 				disabled={!canContinue}
 				onclick={goNext}
@@ -536,7 +536,7 @@
 						<button
 							type="button"
 							class="font-ui rounded-full border px-3.5 py-1.5 text-sm {editGoalAmount === amount
-								? 'border-accent bg-accent text-white'
+								? 'border-accent bg-accent text-ink'
 								: 'border-line bg-white'}"
 							onclick={() => (editGoalText = amount.toLocaleString('en-KE'))}
 						>
@@ -585,7 +585,7 @@
 					aria-label="Title"
 					class="w-full border-b border-line bg-transparent py-2 text-xl outline-none"
 					maxlength="80"
-					placeholder="Help Maya get home"
+					placeholder="Donate to help..."
 					bind:value={editTitle}
 					onkeydown={(e) => {
 						if (e.key === 'Enter') {
@@ -621,7 +621,7 @@
 				<button
 					type="button"
 					class="font-ui rounded-full px-5 py-2.5 text-sm font-semibold {canSaveEdit
-						? 'bg-accent text-white'
+						? 'bg-accent text-ink hover:bg-accent-deep hover:text-card'
 						: 'cursor-not-allowed bg-line text-mute'}"
 					disabled={!canSaveEdit}
 					onclick={saveEdit}

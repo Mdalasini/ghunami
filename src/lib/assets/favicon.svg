@@ -2,7 +2,7 @@
 <title id="title">Horizon</title>
 <desc id="desc">A wide rising semicircle over two receding horizontal bands. A calm, expansive view of possibility.</desc>
 <rect width="400" height="400" fill="#FFE8A3"/>
-<g fill="#000000">
+<g fill="#1B1B1B">
 <path d="M100 214A100 100 0 0 1 300 214Z"/>
 <path d="M76 234H324V258H76Z"/>
 <path d="M116 278H284V302H116Z"/>

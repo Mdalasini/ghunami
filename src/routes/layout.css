@@ -4,15 +4,19 @@
 	--font-display: 'Nunito', ui-rounded, system-ui, sans-serif;
 	--font-body: 'Hanken Grotesk', system-ui, sans-serif;
 	--font-ui: 'Hanken Grotesk', system-ui, sans-serif;
-	--color-ink: #141a22;
-	--color-paper: #e6ebf0;
-	--color-card: #f7f9fb;
-	--color-accent: #2451e6;
-	--color-accent-ink: #0d1f6b;
-	--color-coin: #c9842a;
-	--color-mute: #5b6573;
-	--color-line: #c5ced8;
+	--color-ink: #1b1b1b;
+	--color-paper: #fff6e0;
+	--color-card: #ffffff;
 	--color-sun: #ffe8a3;
+	--color-accent: #d9a441;
+	--color-accent-deep: #8b5a14;
+	--color-slate: #2e4057;
+	--color-terra: #d9754f;
+	--color-accent-ink: #9c4a2c;
+	--color-coin: #8b5a14;
+	--color-mute: #2e4057;
+	--color-hint: #7d6848;
+	--color-line: #e8d4a0;
 }
 
 html,
@@ -35,21 +39,25 @@ textarea {
 
 ::selection {
 	background: var(--color-sun);
-	color: #000;
+	color: var(--color-ink);
 }
 
 input,
 textarea {
-	caret-color: var(--color-accent);
+	caret-color: var(--color-accent-deep);
+}
+
+* {
+	scrollbar-color: var(--color-accent) var(--color-paper);
 }
 
 ::placeholder {
-	color: var(--color-mute);
+	color: var(--color-hint);
 	opacity: 1;
 }
 
 :focus-visible {
-	outline: 2px solid var(--color-accent);
+	outline: 2px solid var(--color-ink);
 	outline-offset: 3px;
 }
 

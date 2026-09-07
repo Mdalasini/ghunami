@@ -4,7 +4,7 @@
 	let { title, children }: { title: string; children: Snippet } = $props();
 </script>
 
-<aside class="rounded-2xl bg-sun/55 px-5 py-4">
+<aside class="rounded-2xl bg-sun px-5 py-4">
 	<p
 		class="font-ui flex items-center gap-2 text-xs font-semibold tracking-[0.08em] text-ink uppercase"
 	>
