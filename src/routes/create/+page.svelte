@@ -129,6 +129,19 @@
 			goNext();
 		}
 	}
+
+	function onGoalKeydown(e: KeyboardEvent) {
+		onEnter(e);
+		if (e.key.length === 1 && !/[0-9]/.test(e.key) && !e.metaKey && !e.ctrlKey) {
+			e.preventDefault();
+		}
+	}
+
+	function onGoalInput(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		parseGoal(input.value);
+		input.value = goalText;
+	}
 </script>
 
 <svelte:head>
@@ -163,7 +176,7 @@
 {/snippet}
 
 {#snippet receiptRow(label: string, n: number, children: import('svelte').Snippet)}
-	<div class="flex items-start justify-between gap-4 border-t border-dashed border-line py-4">
+	<div class="flex items-start justify-between gap-4 py-4">
 		<div class="min-w-0 flex-1">
 			<p class="text-sm font-medium text-mute">{label}</p>
 			<div class="mt-1">{@render children()}</div>
@@ -178,6 +191,18 @@
 			</button>
 		{/if}
 	</div>
+{/snippet}
+
+{#snippet photoEdit(n: number)}
+	{#if !done}
+		<button
+			type="button"
+			class="absolute top-3 right-3 rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
+			onclick={() => goTo(n)}
+		>
+			Edit
+		</button>
+	{/if}
 {/snippet}
 
 <div class="flex min-h-dvh flex-col">
@@ -221,7 +246,7 @@
 				{@render sent(2, photoBubble)}
 			{/if}
 			{#if shownThrough >= 3 && draft.title.trim()}
-				{#snippet titleBubble()}<span class="text-lg font-bold">{draft.title}</span>{/snippet}
+				{#snippet titleBubble()}<span class="text-lg font-bold wrap-break-word">{draft.title}</span>{/snippet}
 				{@render sent(3, titleBubble)}
 			{/if}
 		{/if}
@@ -282,33 +307,44 @@
 								Draft confirmed
 							</p>
 						{/if}
-						{#if draft.coverUrl}
-							<img src={draft.coverUrl} alt="Your cover" class="mb-4 h-56 w-full rounded-2xl object-cover" />
-						{/if}
-						{#snippet goalVal()}<p class="text-3xl font-extrabold tracking-[-0.02em]">{draft.goal !== null ? formatGoal(draft.goal) : '—'}</p>{/snippet}
-						{#snippet photoVal()}<p class="truncate text-base">{draft.coverName || 'None added'}</p>{/snippet}
-						{#snippet titleVal()}<p class="text-xl font-bold">{draft.title}</p>{/snippet}
-						{#snippet storyVal()}<p class="whitespace-pre-wrap text-base leading-relaxed">{draft.story}</p>{/snippet}
-						{@render receiptRow('Goal', 1, goalVal)}
-						{@render receiptRow('Cover photo', 2, photoVal)}
-						{@render receiptRow('Title', 3, titleVal)}
-						{@render receiptRow('Story', 4, storyVal)}
+						<div class="divide-y divide-dashed divide-line">
+							{#snippet titleVal()}<p class="text-xl font-bold wrap-break-word">{draft.title}</p>{/snippet}
+							{@render receiptRow('Title', 3, titleVal)}
+							<div class="py-4">
+								<p class="text-sm font-medium text-mute">Cover photo</p>
+								{#if draft.coverUrl}
+									<div class="relative mt-1">
+										<img src={draft.coverUrl} alt="Your cover" class="h-56 w-full rounded-2xl object-cover" />
+										{@render photoEdit(2)}
+									</div>
+								{:else}
+									<p class="mt-1 text-base">None added</p>
+								{/if}
+							</div>
+							{#snippet goalVal()}<p class="text-3xl font-extrabold tracking-[-0.02em]">{draft.goal !== null ? formatGoal(draft.goal) : '—'}</p>{/snippet}
+							{@render receiptRow('Goal', 1, goalVal)}
+							{#snippet storyVal()}<p class="whitespace-pre-wrap text-base leading-relaxed">{draft.story}</p>{/snippet}
+							{@render receiptRow('Story', 4, storyVal)}
+						</div>
 					</section>
 				{:else if step === 1}
 					<label
 						class="compose-card ml-15 flex items-baseline gap-3 rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent"
 					>
 						<span class="sr-only">Goal in Kenyan shillings</span>
-						<span class="text-2xl font-extrabold text-accent md:text-3xl" aria-hidden="true">Ksh</span>
-						<input
-							class="field-bare text-[3.5rem] leading-none font-extrabold tracking-[-0.03em] md:text-6xl"
-							inputmode="numeric"
-							autocomplete="off"
-							placeholder="0"
-							value={goalText}
-							oninput={(e) => parseGoal(e.currentTarget.value)}
-							onkeydown={onEnter}
-						/>
+						<span class="shrink-0 text-2xl font-extrabold text-accent md:text-3xl" aria-hidden="true">Ksh</span>
+						<span class="goal-fit min-w-0 flex-1">
+							<input
+								class="goal-amount field-bare min-w-0 overflow-hidden whitespace-nowrap font-extrabold tracking-[-0.03em]"
+								size="1"
+								inputmode="numeric"
+								autocomplete="off"
+								placeholder="0"
+								value={goalText}
+								oninput={onGoalInput}
+								onkeydown={onGoalKeydown}
+							/>
+						</span>
 					</label>
 					<div class="ml-15 flex flex-wrap gap-2" role="group" aria-label="Suggested goals">
 						{#each SUGGESTED as amount (amount)}
@@ -345,12 +381,11 @@
 						ondrop={onDrop}
 					>
 						{#if draft.coverUrl}
-							<img src={draft.coverUrl} alt="Your cover" class="h-72 w-full object-cover" />
-							<div class="flex items-center justify-between gap-4 px-5 py-4">
-								<p class="min-w-0 truncate text-sm text-mute">{draft.coverName}</p>
+							<div class="relative">
+								<img src={draft.coverUrl} alt="Your cover" class="h-72 w-full object-cover" />
 								<button
 									type="button"
-									class="shrink-0 rounded-full border-2 border-line px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
+									class="absolute top-3 right-3 rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
 									onclick={() => fileInput?.click()}
 								>
 									Change
@@ -380,13 +415,14 @@
 						class="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent"
 					>
 						<span class="sr-only">Title</span>
-						<input
-							class="field-bare text-2xl font-bold tracking-[-0.01em] md:text-3xl"
+						<textarea
+							class="field-bare min-h-[1.2em] resize-none text-2xl font-bold tracking-[-0.01em] wrap-break-word md:text-3xl [field-sizing:content]"
+							rows="1"
 							maxlength="80"
 							placeholder="Help Maya get home"
 							bind:value={draft.title}
 							onkeydown={onEnter}
-						/>
+						></textarea>
 						<span class="mt-2 block text-right text-xs font-medium text-mute">{draft.title.length} / 80</span>
 					</label>
 				{:else if step === 4}
@@ -440,6 +476,18 @@
 </div>
 
 <style>
+	.goal-fit {
+		container-type: inline-size;
+	}
+	.goal-amount {
+		font-size: min(3.5rem, calc((100cqi - 8px) / 4.2));
+		line-height: 1;
+	}
+	@media (min-width: 768px) {
+		.goal-amount {
+			font-size: min(4rem, calc((100cqi - 8px) / 4.2));
+		}
+	}
 	.sending-draft :global(.compose-card) {
 		background-color: var(--color-accent);
 		border-color: var(--color-accent);
