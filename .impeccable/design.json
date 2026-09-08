@@ -1,0 +1,226 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-08T00:43:00+03:00",
+  "title": "Design System: Ghunami",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Night Grove",
+        "canonical": "oklch(20.4% 0.022 152.6)",
+        "tonalRamp": ["#0b140c", "#222c23", "#3b463c", "#4b5e52", "#66796c", "#96a297", "#cdd9cf", "#eef3ee"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Pale Grove Paper",
+        "canonical": "oklch(95.9% 0.008 145.5)",
+        "tonalRamp": ["#0f1a12", "#222c23", "#4b5e52", "#66796c", "#96a297", "#cdd9cf", "#d6ead9", "#eef3ee"]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "White Card",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#0f1a12", "#4b5e52", "#66796c", "#cdd9cf", "#d6ead9", "#eef3ee", "#f7faf7", "#ffffff"]
+      },
+      "sun": {
+        "role": "neutral",
+        "displayName": "Mint Wash",
+        "canonical": "oklch(91.8% 0.031 149.8)",
+        "tonalRamp": ["#0a150b", "#116232", "#15803d", "#556255", "#8adb8f", "#cdd9cf", "#d6ead9", "#eef3ee"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Confirm Green",
+        "canonical": "oklch(52.7% 0.137 150.1)",
+        "tonalRamp": ["#001d00", "#116232", "#15803d", "#1c7029", "#3e8e47", "#64b46a", "#d6ead9", "#eef3ee"]
+      },
+      "accent-deep": {
+        "role": "primary",
+        "displayName": "Press Green",
+        "canonical": "oklch(43.8% 0.108 151.7)",
+        "tonalRamp": ["#001d00", "#0a2a16", "#116232", "#15803d", "#3e8e47", "#64b46a", "#d6ead9", "#eef3ee"]
+      },
+      "mute": {
+        "role": "neutral",
+        "displayName": "Leaf Mute",
+        "canonical": "oklch(46.2% 0.030 157.3)",
+        "tonalRamp": ["#0f1a12", "#222c23", "#3b463c", "#4b5e52", "#66796c", "#96a297", "#cdd9cf", "#eef3ee"]
+      },
+      "hint": {
+        "role": "neutral",
+        "displayName": "Hint Sage",
+        "canonical": "oklch(55.7% 0.030 155.4)",
+        "tonalRamp": ["#0f1a12", "#3b463c", "#4b5e52", "#66796c", "#96a297", "#cdd9cf", "#d6ead9", "#eef3ee"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Grove Line",
+        "canonical": "oklch(87.3% 0.019 150.5)",
+        "tonalRamp": ["#0f1a12", "#4b5e52", "#66796c", "#96a297", "#cdd9cf", "#d6ead9", "#eef3ee", "#ffffff"]
+      },
+      "error": {
+        "role": "tertiary",
+        "displayName": "Signal Red",
+        "canonical": "oklch(53.9% 0.194 26.7)",
+        "tonalRamp": ["#490000", "#6b0000", "#8e0000", "#c62828", "#d53832", "#ff6256", "#ff8a7b", "#ffb2a1"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Current question inside the incoming bubble." },
+      "headline": { "displayName": "Headline", "purpose": "Landing hero and Goal money numerals." },
+      "title": { "displayName": "Title", "purpose": "Compact sent answers, photo prompt, receipt confirmation." },
+      "body": { "displayName": "Body", "purpose": "Subcopy, story, tips, receipt story." },
+      "label": { "displayName": "Label", "purpose": "Pressable uppercase actions and micro Edit/Change pills." }
+    },
+    "shadows": [
+      {
+        "name": "press-edge",
+        "value": "0 4px 0 0 var(--btn-edge, var(--color-accent-deep))",
+        "purpose": "Solid 4px bottom edge on live pressable buttons."
+      },
+      {
+        "name": "pressed",
+        "value": "0 0 0 0 var(--btn-edge, var(--color-accent-deep))",
+        "purpose": "Edge collapses while the control translates down 4px."
+      }
+    ],
+    "motion": [
+      {
+        "name": "press",
+        "value": "100ms linear",
+        "purpose": "Button transform and edge collapse on :active."
+      },
+      {
+        "name": "arrive",
+        "value": "360ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+        "purpose": "Incoming question and compose fly up (Svelte fly + cubicOut)."
+      },
+      {
+        "name": "send",
+        "value": "220ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+        "purpose": "Compose flies out after the 160ms green flood."
+      },
+      {
+        "name": "progress-fill",
+        "value": "500ms ease-out",
+        "purpose": "Segment width on the create-flow progress bar."
+      }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "768px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Confirm-green pressable capsule for Continue and other go actions.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Continue</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; min-width: 10rem; height: 3.25rem; padding: 0 1.75rem; border: 0; border-radius: 9999px; background: var(--color-accent, #15803d); color: var(--color-card, #ffffff); font-family: Rubik, system-ui, sans-serif; font-size: 0.875rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 4px 0 0 var(--color-accent-deep, #116232); transition: transform 100ms, box-shadow 100ms, background-color 100ms; cursor: pointer; } .ds-btn-primary:hover { background: var(--color-accent-deep, #116232); } .ds-btn-primary:active { transform: translateY(4px); box-shadow: 0 0 0 0 var(--color-accent-deep, #116232); } .ds-btn-primary:focus-visible { outline: 3px solid var(--color-accent, #15803d); outline-offset: 3px; }"
+    },
+    {
+      "name": "Primary Button Disabled",
+      "kind": "button",
+      "refersTo": "button-primary-disabled",
+      "description": "Grove Line fill, mute type, no press edge — Continue before the step is valid.",
+      "html": "<button class=\"ds-btn-primary-disabled\" type=\"button\" disabled>Continue</button>",
+      "css": ".ds-btn-primary-disabled { display: inline-flex; align-items: center; justify-content: center; min-width: 10rem; height: 3.25rem; padding: 0 1.75rem; border: 0; border-radius: 9999px; background: var(--color-line, #cdd9cf); color: var(--color-mute, #4b5e52); font-family: Rubik, system-ui, sans-serif; font-size: 0.875rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: none; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "White Card Back/Cancel capsule with a Grove Line stroke and matching 4px edge.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Back</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; height: 3.25rem; padding: 0 1.75rem; border: 2px solid var(--color-line, #cdd9cf); border-radius: 9999px; background: var(--color-card, #ffffff); color: var(--color-mute, #4b5e52); font-family: Rubik, system-ui, sans-serif; font-size: 0.875rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; box-shadow: 0 4px 0 0 var(--color-line, #cdd9cf); transition: transform 100ms, box-shadow 100ms, color 100ms; cursor: pointer; } .ds-btn-secondary:hover { color: var(--color-ink, #0f1a12); } .ds-btn-secondary:active { transform: translateY(4px); box-shadow: 0 0 0 0 var(--color-line, #cdd9cf); } .ds-btn-secondary:focus-visible { outline: 3px solid var(--color-accent, #15803d); outline-offset: 3px; }"
+    },
+    {
+      "name": "Quick-reply Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Suggested KES amounts; selected state shares Confirm Green with sent bubbles.",
+      "html": "<div class=\"ds-chip-row\" role=\"group\" aria-label=\"Suggested goals\"><button class=\"ds-chip\" type=\"button\">Ksh 50,000</button><button class=\"ds-chip ds-chip-on\" type=\"button\" aria-pressed=\"true\">Ksh 100,000</button></div>",
+      "css": ".ds-chip-row { display: flex; flex-wrap: wrap; gap: 0.5rem; } .ds-chip { border-radius: 9999px; border: 2px solid var(--color-line, #cdd9cf); background: var(--color-card, #ffffff); color: var(--color-accent, #15803d); padding: 0.625rem 1.25rem; font-family: Rubik, system-ui, sans-serif; font-size: 1rem; font-weight: 700; font-feature-settings: \"tnum\"; cursor: pointer; transition: border-color 150ms, background-color 150ms, color 150ms; } .ds-chip:hover { border-color: var(--color-accent, #15803d); } .ds-chip-on { border-color: var(--color-accent, #15803d); background: var(--color-accent, #15803d); color: var(--color-card, #ffffff); } .ds-chip:focus-visible { outline: 3px solid var(--color-accent, #15803d); outline-offset: 3px; }"
+    },
+    {
+      "name": "Incoming Bubble",
+      "kind": "custom",
+      "refersTo": "bubble-incoming",
+      "description": "ghunami question: Horizon disc plus a white balloon with a bottom-left tail.",
+      "html": "<div class=\"ds-in\"><span class=\"ds-avatar\" aria-hidden=\"true\"><svg viewBox=\"76 114 248 188\" class=\"ds-horizon\" fill=\"currentColor\"><path d=\"M100 214A100 100 0 0 1 300 214Z\" /><path d=\"M76 234H324V258H76Z\" /><path d=\"M116 278H284V302H116Z\" /></svg></span><div class=\"ds-in-bubble\"><p class=\"ds-in-q\">How much do you want to raise?</p><p class=\"ds-in-sub\">Pick a starting number. You can change it later.</p></div></div>",
+      "css": ".ds-in { display: flex; align-items: flex-end; gap: 0.75rem; font-family: Rubik, system-ui, sans-serif; } .ds-avatar { display: inline-flex; align-items: center; justify-content: center; width: 3rem; height: 3rem; flex-shrink: 0; border-radius: 9999px; background: var(--color-ink, #0f1a12); color: var(--color-card, #ffffff); } .ds-horizon { height: 1.25rem; width: auto; } .ds-in-bubble { min-width: 0; border-radius: 1.5rem 1.5rem 1.5rem 0.5rem; background: var(--color-card, #ffffff); padding: 1.25rem 1.5rem; } .ds-in-q { margin: 0; font-size: 1.75rem; line-height: 1.15; font-weight: 800; letter-spacing: -0.02em; color: var(--color-ink, #0f1a12); } .ds-in-sub { margin: 0.5rem 0 0; font-size: 1rem; color: var(--color-mute, #4b5e52); }"
+    },
+    {
+      "name": "Sent Bubble",
+      "kind": "custom",
+      "refersTo": "bubble-sent",
+      "description": "A confirmed answer: right-aligned Confirm Green balloon, tap-to-edit.",
+      "html": "<div class=\"ds-sent-wrap\"><button class=\"ds-sent\" type=\"button\">Ksh 100,000<svg viewBox=\"0 0 20 20\" class=\"ds-sent-edit\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M13.5 3.5l3 3L7 16H4v-3z\" /></svg></button></div>",
+      "css": ".ds-sent-wrap { display: flex; justify-content: flex-end; } .ds-sent { display: inline-flex; align-items: center; gap: 0.75rem; max-width: 85%; border: 0; border-radius: 1.5rem 1.5rem 0.5rem 1.5rem; background: var(--color-accent, #15803d); color: var(--color-card, #ffffff); padding: 0.75rem 1.25rem; font-family: Rubik, system-ui, sans-serif; font-size: 1.125rem; font-weight: 700; font-feature-settings: \"tnum\"; text-align: left; cursor: pointer; } .ds-sent:hover { background: var(--color-accent-deep, #116232); } .ds-sent-edit { width: 1rem; height: 1rem; flex-shrink: 0; opacity: 0.7; } .ds-sent:hover .ds-sent-edit { opacity: 1; } .ds-sent:focus-visible { outline: 3px solid var(--color-accent, #15803d); outline-offset: 3px; }"
+    },
+    {
+      "name": "Compose Field",
+      "kind": "input",
+      "refersTo": "input-compose",
+      "description": "Outgoing compose card: the bubble carries the 2px stroke; the inner field is bare.",
+      "html": "<label class=\"ds-compose\"><span class=\"ds-ksh\">Ksh</span><input class=\"ds-field\" inputmode=\"numeric\" placeholder=\"0\" value=\"100,000\" /></label>",
+      "css": ".ds-compose { display: flex; align-items: baseline; gap: 0.75rem; border-radius: 1.5rem 0.5rem 1.5rem 1.5rem; border: 2px solid var(--color-line, #cdd9cf); background: var(--color-card, #ffffff); padding: 1.25rem 1.5rem; font-family: Rubik, system-ui, sans-serif; } .ds-compose:focus-within { border-color: var(--color-accent, #15803d); } .ds-ksh { font-size: 1.5rem; font-weight: 800; color: var(--color-accent, #15803d); } .ds-field { display: block; width: 100%; border: 0; background: transparent; padding: 0; font: inherit; font-size: 3.5rem; line-height: 1; font-weight: 800; letter-spacing: -0.03em; color: var(--color-ink, #0f1a12); font-feature-settings: \"tnum\"; caret-color: var(--color-accent, #15803d); outline: none; } .ds-field::placeholder { color: var(--color-hint, #66796c); opacity: 1; }"
+    },
+    {
+      "name": "Progress Segments",
+      "kind": "nav",
+      "refersTo": "progress-segments",
+      "description": "Five-segment create-flow track; current segment sits at 45% Confirm Green.",
+      "html": "<ol class=\"ds-progress\" aria-label=\"Progress: step 2 of 5\"><li class=\"ds-seg\"><span class=\"ds-fill\" style=\"width:100%\"></span></li><li class=\"ds-seg\" aria-current=\"step\"><span class=\"ds-fill\" style=\"width:45%\"></span></li><li class=\"ds-seg\"><span class=\"ds-fill\" style=\"width:0\"></span></li><li class=\"ds-seg\"><span class=\"ds-fill\" style=\"width:0\"></span></li><li class=\"ds-seg\"><span class=\"ds-fill\" style=\"width:0\"></span></li></ol>",
+      "css": ".ds-progress { display: flex; flex: 1; gap: 0.375rem; margin: 0; padding: 0; list-style: none; } .ds-seg { flex: 1; height: 1rem; overflow: hidden; border-radius: 9999px; background: var(--color-line, #cdd9cf); } .ds-fill { display: block; height: 100%; border-radius: 9999px; background: var(--color-accent, #15803d); }"
+    },
+    {
+      "name": "Tip Bubble",
+      "kind": "custom",
+      "refersTo": "tip-incoming",
+      "description": "Second incoming from ghunami: smaller white balloon under the question.",
+      "html": "<div class=\"ds-tip\"><span class=\"ds-avatar\" aria-hidden=\"true\"><svg viewBox=\"76 114 248 188\" class=\"ds-horizon\" fill=\"currentColor\"><path d=\"M100 214A100 100 0 0 1 300 214Z\" /><path d=\"M76 234H324V258H76Z\" /><path d=\"M116 278H284V302H116Z\" /></svg></span><aside class=\"ds-tip-bubble\"><p class=\"ds-tip-title\">A good title</p><p class=\"ds-tip-body\">Mention who or what it’s for, and the action.</p></aside></div>",
+      "css": ".ds-tip { display: flex; align-items: flex-end; gap: 0.75rem; font-family: Rubik, system-ui, sans-serif; } .ds-tip .ds-avatar { display: inline-flex; align-items: center; justify-content: center; width: 3rem; height: 3rem; flex-shrink: 0; border-radius: 9999px; background: var(--color-ink, #0f1a12); color: var(--color-card, #ffffff); } .ds-tip .ds-horizon { height: 1.25rem; width: auto; } .ds-tip-bubble { min-width: 0; border-radius: 1.5rem 1.5rem 1.5rem 0.5rem; background: var(--color-card, #ffffff); padding: 1rem 1.25rem; color: var(--color-mute, #4b5e52); } .ds-tip-title { margin: 0; font-size: 0.875rem; font-weight: 700; color: var(--color-ink, #0f1a12); } .ds-tip-body { margin: 0.375rem 0 0; font-size: 0.875rem; line-height: 1.625; }"
+    },
+    {
+      "name": "Receipt",
+      "kind": "card",
+      "refersTo": "receipt",
+      "description": "Review confirmation: dashed rows, tabular goal, green tick when saved.",
+      "html": "<section class=\"ds-receipt\" aria-label=\"Your draft\"><p class=\"ds-ok\"><svg viewBox=\"0 0 20 20\" class=\"ds-tick\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M10 0a10 10 0 1 0 0 20A10 10 0 0 0 10 0Zm4.7 7.7-5.5 5.5a1 1 0 0 1-1.4 0L5.3 10.7a1 1 0 1 1 1.4-1.4L8.5 11l4.8-4.8a1 1 0 0 1 1.4 1.4Z\" /></svg>Draft confirmed</p><div class=\"ds-row\"><div><p class=\"ds-lbl\">Goal</p><p class=\"ds-amt\">Ksh 100,000</p></div></div><div class=\"ds-row\"><div><p class=\"ds-lbl\">Title</p><p class=\"ds-ttl\">Help Maya get home</p></div></div></section>",
+      "css": ".ds-receipt { border-radius: 0.5rem 1.5rem 1.5rem 1.5rem; background: var(--color-card, #ffffff); padding: 1.25rem 1.5rem 0.5rem; font-family: Rubik, system-ui, sans-serif; color: var(--color-ink, #0f1a12); } .ds-ok { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 1rem; font-size: 1.25rem; font-weight: 800; color: var(--color-accent, #15803d); } .ds-tick { width: 1.5rem; height: 1.5rem; } .ds-row { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px dashed var(--color-line, #cdd9cf); padding: 1rem 0; } .ds-lbl { margin: 0; font-size: 0.875rem; font-weight: 500; color: var(--color-mute, #4b5e52); } .ds-amt { margin: 0.25rem 0 0; font-size: 1.875rem; font-weight: 800; letter-spacing: -0.02em; font-feature-settings: \"tnum\"; } .ds-ttl { margin: 0.25rem 0 0; font-size: 1.25rem; font-weight: 700; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "M-Pesa Confirmation",
+    "overview": "Ghunami drafts a fundraiser the way money already moves in Kenya: a thread of messages that ends in a confirmation. The screen is a pale green-gray chat, not a gray form. ghunami asks from the left in white incoming bubbles, with the Horizon mark sitting in a dark disc as the avatar. Your answers leave as confirm-green sent bubbles. Review reads back as a receipt: dashed rows, tabular numerals, a green tick.\n\nThe material is fat and tactile. Actions are fully rounded pills with a solid darker bottom edge that presses in. One self-hosted face (Rubik, 300–900) carries every role; size does the talking. The name **ghunami** (lowercase in the wordmark; Ghunami in titles) and the Horizon mark (rising semicircle over two receding bands) are binding identity.",
+    "keyCharacteristics": [
+      "Pale green-gray paper with white speech surfaces and confirm-green sent answers",
+      "One face, hierarchy by size; labels shout with uppercase and extra-bold",
+      "Pressable 4px bottom-edge buttons",
+      "Chat tails: large radius with one tighter corner toward the speaker",
+      "Green means go or done; red is reserved for errors"
+    ],
+    "rules": [
+      { "name": "The Palette Law", "body": "Green is go and done. Red is error only. Do not invent a third accent.", "section": "colors" },
+      { "name": "The Confirmation Field Rule", "body": "A sent answer and a live primary action share Confirm Green. If it is not an answer, a progress fill, or a go-control, it is not green.", "section": "colors" },
+      { "name": "The One Face Rule", "body": "Rubik for display, body, UI, and numerals. Change size and case; do not add a display serif or a mono.", "section": "typography" },
+      { "name": "The Pressable Edge Rule", "body": "A live primary or secondary action carries a 4px solid bottom edge in the matching deep/line color. Disabled primaries lose the edge and sit on Grove Line.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the Horizon mark and the name ghunami on every surface that represents the product.",
+      "Do put go/done/sent/progress on Confirm Green, and press travel on a 4px edge.",
+      "Do give speech surfaces a 24px round and one 8px tail toward the speaker.",
+      "Do set money and questions extra-bold, with tabular numerals on amounts.",
+      "Do dock Continue/Back as pressable capsules on paper, and disable Continue on Grove Line with no edge."
+    ],
+    "donts": [
+      "Don't use Signal Red for anything but an error message.",
+      "Don't add a second typeface or a decorative italic.",
+      "Don't use ambient drop shadows to lift cards; the edge and the paper are the depth.",
+      "Don't turn a compose well into a gray Material field with its own inner border and ring.",
+      "Don't replace the Horizon disc with a generic initials avatar."
+    ]
+  }
+}
