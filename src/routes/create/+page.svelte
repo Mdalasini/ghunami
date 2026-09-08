@@ -1,102 +1,43 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import { tick } from 'svelte';
 	import { draft, formatGoal, resetDraft, setCover } from '$lib/create/draft.svelte';
 	import Tip from '$lib/create/Tip.svelte';
-	import logo from '$lib/assets/logo.svg';
 
 	const STEPS = [
-		{ n: 1, label: 'Goal' },
-		{ n: 2, label: 'Photo' },
-		{ n: 3, label: 'Story' },
-		{ n: 4, label: 'Review' }
+		{ q: 'How much do you want to raise?', sub: 'Pick a starting number. You can change it later.' },
+		{ q: 'Add a cover photo', sub: 'A clear photo of the person or place helps more than a logo.' },
+		{ q: 'What should we call it?', sub: 'Say who it’s for and the action, like “Help Maya get home”.' },
+		{ q: 'Tell people what happened', sub: 'Plain words. Who it’s for, and what the money does.' },
+		{ q: 'Does this look right?', sub: 'Tap anything to change it.' }
 	] as const;
+	const LAST = STEPS.length;
 
 	const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
 	const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 	let step = $state(1);
 	let done = $state(false);
+	let sending = $state(false);
+	let shownThrough = $state(0);
 	let goalText = $state('');
 	let fileInput: HTMLInputElement | undefined = $state();
 	let dragging = $state(false);
 	let coverError = $state('');
 
-	type EditField = 'goal' | 'photo' | 'title' | 'story';
-	let editing = $state<EditField | null>(null);
-	let dialogEl: HTMLDialogElement | undefined = $state();
-	let editGoalText = $state('');
-	let editTitle = $state('');
-	let editStory = $state('');
-	let editGoalInput: HTMLInputElement | undefined = $state();
-	let editTitleInput: HTMLInputElement | undefined = $state();
-	let editStoryArea: HTMLTextAreaElement | undefined = $state();
-	let editFileInput: HTMLInputElement | undefined = $state();
-
-	const editGoalAmount = $derived(Number(editGoalText.replace(/[^\d]/g, '')) || 0);
+	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 	const canContinue = $derived(
 		(step === 1 && draft.goal !== null && draft.goal > 0) ||
 			(step === 2 && draft.coverUrl !== '') ||
-			(step === 3 && draft.title.trim().length > 0 && draft.story.trim().length > 0) ||
-			step === 4
+			(step === 3 && draft.title.trim().length > 0) ||
+			(step === 4 && draft.story.trim().length > 0) ||
+			step === LAST
 	);
 
-	const heading = $derived(
-		done
-			? 'Ready when you are'
-			: step === 1
-				? 'How much do you want to raise?'
-				: step === 2
-					? 'Add a cover photo'
-					: step === 3
-						? 'Give it a title and a story'
-						: 'Does this look right?'
-	);
-
-	const sub = $derived(
-		done
-			? 'Nothing is public yet. This is your draft.'
-			: step === 1
-				? 'Pick a starting number. You can change it later.'
-				: step === 2
-					? 'A clear photo of the person or place helps more than a logo.'
-					: step === 3
-						? 'Plain words. Who it’s for, and what the money does.'
-						: 'Check the goal, photo, and story before you leave this page.'
-	);
-
-	const editHeading = $derived(
-		editing === 'goal'
-			? 'Edit your goal'
-			: editing === 'photo'
-				? 'Change cover photo'
-				: editing === 'title'
-					? 'Edit the title'
-					: 'Edit the story'
-	);
-
-	const canSaveEdit = $derived(
-		editing === 'goal'
-			? editGoalAmount > 0
-			: editing === 'title'
-				? editTitle.trim().length > 0
-				: editing === 'story'
-					? editStory.trim().length > 0
-					: false
-	);
-
-	$effect(() => {
-		if (!editing || !dialogEl) return;
-		if (!dialogEl.open) dialogEl.showModal();
-		const target =
-			editing === 'goal'
-				? editGoalInput
-				: editing === 'title'
-					? editTitleInput
-					: editing === 'story'
-						? editStoryArea
-						: undefined;
-		target?.focus();
-	});
+	const heading = $derived(done ? 'Saved in this browser' : STEPS[step - 1].q);
+	const sub = $derived(done ? 'Nothing is public yet. This is your draft.' : STEPS[step - 1].sub);
 
 	function parseGoal(value: string) {
 		const digits = value.replace(/[^\d]/g, '');
@@ -117,17 +58,16 @@
 
 	function acceptFile(file: File | undefined) {
 		coverError = '';
-		if (!file) return false;
+		if (!file) return;
 		if (!file.type.startsWith('image/')) {
-			coverError = 'Use a JPG, PNG, or WebP image.';
-			return false;
+			coverError = 'That isn’t an image. Use a JPG, PNG, or WebP.';
+			return;
 		}
 		if (file.size > MAX_IMAGE_BYTES) {
-			coverError = 'Keep the photo under 8 MB.';
-			return false;
+			coverError = 'That photo is over 8 MB. Pick a smaller one.';
+			return;
 		}
 		setCover(file);
-		return true;
 	}
 
 	function onFileChange(event: Event) {
@@ -142,62 +82,35 @@
 		acceptFile(event.dataTransfer?.files[0]);
 	}
 
-	function onEditFileChange(event: Event) {
-		const input = event.currentTarget as HTMLInputElement;
-		if (acceptFile(input.files?.[0])) dialogEl?.close();
-		input.value = '';
+	async function goTo(n: number) {
+		done = false;
+		sending = false;
+		shownThrough = Math.max(0, n - 1);
+		step = n;
+		await tick();
+		window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
 	}
 
-	function onEditDrop(event: DragEvent) {
-		event.preventDefault();
-		dragging = false;
-		if (acceptFile(event.dataTransfer?.files[0])) dialogEl?.close();
-	}
-
-	function openEdit(field: EditField) {
-		coverError = '';
-		if (field === 'goal') {
-			editGoalText = draft.goal !== null ? draft.goal.toLocaleString('en-KE') : '';
-		}
-		if (field === 'title') editTitle = draft.title;
-		if (field === 'story') editStory = draft.story;
-		editing = field;
-	}
-
-	function parseEditGoal(value: string) {
-		const digits = value.replace(/[^\d]/g, '');
-		editGoalText = digits ? Number(digits).toLocaleString('en-KE') : '';
-	}
-
-	function saveEdit() {
-		if (editing === 'goal' && editGoalAmount > 0) {
-			draft.goal = editGoalAmount;
-			goalText = editGoalText;
-		} else if (editing === 'title' && editTitle.trim()) {
-			draft.title = editTitle.trim();
-		} else if (editing === 'story' && editStory.trim()) {
-			draft.story = editStory.trim();
-		} else {
-			return;
-		}
-		dialogEl?.close();
-	}
-
-	function goNext() {
+	async function goNext() {
 		if (!canContinue) return;
-		if (step < 4) {
-			step += 1;
+		if (step >= LAST) {
+			done = true;
 			return;
 		}
-		done = true;
+		sending = true;
+		await sleep(160);
+		const from = step;
+		sending = false;
+		step = from + 1;
+		await tick();
+		window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+		await sleep(220);
+		shownThrough = from;
 	}
 
 	function goBack() {
-		if (done) {
-			done = false;
-			return;
-		}
-		if (step > 1) step -= 1;
+		if (done) return void (done = false);
+		if (step > 1) void goTo(step - 1);
 	}
 
 	function startOver() {
@@ -205,7 +118,16 @@
 		goalText = '';
 		coverError = '';
 		done = false;
+		sending = false;
+		shownThrough = 0;
 		step = 1;
+	}
+
+	function onEnter(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			goNext();
+		}
 	}
 </script>
 
@@ -213,135 +135,208 @@
 	<title>Start a fundraiser · Ghunami</title>
 </svelte:head>
 
-{#snippet photoTip()}
-	<Tip title="Choosing a photo">
-		<p>Use a clear, bright landscape photo. If possible, pick one from a happier time.</p>
-	</Tip>
+{#snippet horizon(cls: string)}
+	<svg viewBox="76 114 248 188" class={cls} fill="currentColor" aria-hidden="true">
+		<path d="M100 214A100 100 0 0 1 300 214Z" />
+		<path d="M76 234H324V258H76Z" />
+		<path d="M116 278H284V302H116Z" />
+	</svg>
 {/snippet}
 
-{#snippet titleTip()}
-	<Tip title="A good title">
-		<p>Mention who or what it’s for, and the action — like “Help Maya get home”.</p>
-	</Tip>
+<!-- A sent bubble: an answer already given. Tap to go back and change it. -->
+{#snippet sent(n: number, children: import('svelte').Snippet)}
+	<div class="flex justify-end" in:fly={{ y: 16, duration: 280, easing: cubicOut }}>
+		<button
+			type="button"
+			class="group max-w-[85%] rounded-3xl rounded-br-lg bg-accent px-5 py-3 text-left text-base font-medium text-card transition-colors hover:bg-accent-deep"
+			onclick={() => goTo(n)}
+			aria-label="Change your answer to step {n}"
+		>
+			<span class="flex items-center gap-3">
+				<span class="min-w-0">{@render children()}</span>
+				<svg viewBox="0 0 20 20" class="h-4 w-4 shrink-0 text-card/70 transition-colors group-hover:text-card" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+					<path d="M13.5 3.5l3 3L7 16H4v-3z" />
+				</svg>
+			</span>
+		</button>
+	</div>
 {/snippet}
 
-{#snippet storyTips()}
-	<Tip title="What a good story covers">
-		<ol class="space-y-2">
-			{#each ['Introduce yourself.', 'Say who or what you’re fundraising for.', 'Explain what happened.', 'Share how the money will be used.'] as point, i (point)}
-				<li class="flex items-start gap-2.5">
-					<span
-						class="font-ui mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-sun"
-						>{i + 1}</span
-					>
-					<span>{point}</span>
-				</li>
-			{/each}
-		</ol>
-	</Tip>
+{#snippet receiptRow(label: string, n: number, children: import('svelte').Snippet)}
+	<div class="flex items-start justify-between gap-4 border-t border-dashed border-line py-4">
+		<div class="min-w-0 flex-1">
+			<p class="text-sm font-medium text-mute">{label}</p>
+			<div class="mt-1">{@render children()}</div>
+		</div>
+		{#if !done}
+			<button
+				type="button"
+				class="shrink-0 rounded-full border-2 border-line px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
+				onclick={() => goTo(n)}
+			>
+				Edit
+			</button>
+		{/if}
+	</div>
 {/snippet}
 
 <div class="flex min-h-dvh flex-col">
-	<header class="flex items-center justify-between px-6 py-5 md:px-10">
-		<a href="/" aria-label="ghunami — home">
-			<img src={logo} alt="ghunami" class="h-7 w-auto" />
+	<header class="sticky top-0 z-10 bg-paper"><div class="mx-auto flex w-full max-w-[40rem] items-center gap-4 px-4 py-4 md:py-6">
+		<a
+			href="/"
+			aria-label="Cancel and go home"
+			class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-card hover:text-ink"
+		>
+			<svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+				<path d="M3 3l10 10M13 3L3 13" />
+			</svg>
 		</a>
-		{#if !done}
-			<p class="font-ui text-sm text-mute">{step} of {STEPS.length}</p>
-		{/if}
+		<ol class="flex flex-1 gap-1.5" aria-label="Progress: step {done ? LAST : step} of {LAST}">
+			{#each STEPS as s, i (s.q)}
+				<li
+					class="h-4 flex-1 overflow-hidden rounded-full bg-line transition-colors duration-300"
+					aria-current={!done && i + 1 === step ? 'step' : undefined}
+				>
+					<div
+						class="h-full rounded-full bg-accent transition-[width] duration-500 ease-out"
+						style="width: {done || i + 1 < step ? 100 : i + 1 === step ? 45 : 0}%"
+					></div>
+				</li>
+			{/each}
+		</ol>
+		</div>
 	</header>
 
-	{#if !done}
-		<div class="mx-6 h-1 overflow-hidden rounded-full bg-line/50 md:mx-10" aria-hidden="true">
-			<div class="h-full bg-accent-deep" style="width: {(step / STEPS.length) * 100}%"></div>
-		</div>
-	{/if}
+	<main class="mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-end gap-5 px-4 pt-4 pb-32">
+		<!-- The thread: answers already sent. -->
+		{#if !done && step < LAST}
+			{#if shownThrough >= 1 && draft.goal !== null}
+				{#snippet goalBubble()}<span class="text-lg font-bold">{formatGoal(draft.goal ?? 0)}</span>{/snippet}
+				{@render sent(1, goalBubble)}
+			{/if}
+			{#if shownThrough >= 2 && draft.coverUrl}
+				{#snippet photoBubble()}
+					<img src={draft.coverUrl} alt="Your cover" class="h-20 w-28 rounded-2xl object-cover" />
+				{/snippet}
+				{@render sent(2, photoBubble)}
+			{/if}
+			{#if shownThrough >= 3 && draft.title.trim()}
+				{#snippet titleBubble()}<span class="text-lg font-bold">{draft.title}</span>{/snippet}
+				{@render sent(3, titleBubble)}
+			{/if}
+		{/if}
 
-	<div
-		class="mx-auto grid w-full max-w-6xl flex-1 grid-cols-1 gap-10 px-6 py-10 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)] md:items-start md:px-10 md:py-16"
-	>
-		<section class="md:sticky md:top-16">
-			<p class="font-ui text-xs font-medium tracking-[0.16em] text-mute uppercase">
-				{done ? 'Draft' : STEPS[step - 1].label}
-			</p>
-			<h1
-				class="font-display mt-3 text-4xl leading-[1.08] font-extrabold tracking-tight md:text-5xl"
+		<!-- The question, from ghunami. Arrives after the sent bubble mounts. -->
+		{#key `${step}-${done}`}
+			<div class="flex flex-col gap-3" in:fly={{ y: 24, duration: 360, delay: 440, easing: cubicOut }}>
+				<div class="flex items-end gap-3">
+					<span
+						class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink text-card"
+						aria-hidden="true"
+					>
+						{@render horizon('h-5 w-auto')}
+					</span>
+					<div class="min-w-0 rounded-3xl rounded-bl-lg bg-card px-6 py-5">
+						<h1 class="text-[1.75rem] leading-[1.15] font-extrabold tracking-[-0.02em] text-balance md:text-4xl md:leading-[1.12]">
+							{heading}
+						</h1>
+						<p class="mt-2 text-base text-mute md:text-lg">{sub}</p>
+					</div>
+				</div>
+				{#if !done && step === 2}
+					<Tip title="Choosing a photo">
+						<p>Use a clear, bright landscape photo. If possible, pick one from a happier time.</p>
+					</Tip>
+				{:else if !done && step === 3}
+					<Tip title="A good title">
+						<p>Mention who or what it’s for, and the action.</p>
+					</Tip>
+				{:else if !done && step === 4}
+					<Tip title="What a good story covers">
+						<ol class="list-decimal space-y-1 pl-4 marker:font-bold marker:text-accent">
+							<li>Introduce yourself.</li>
+							<li>Say who or what you’re fundraising for.</li>
+							<li>Explain what happened.</li>
+							<li>Share how the money will be used.</li>
+						</ol>
+					</Tip>
+				{/if}
+			</div>
+		{/key}
+
+		<!-- Your reply. Tints accent, then flies up, then the sent bubble mounts. -->
+		{#key `${step}-${done}`}
+			<div
+				class="flex flex-col gap-4 {sending ? 'sending-draft' : ''}"
+				in:fly={{ y: 24, duration: 360, delay: 620, easing: cubicOut }}
+				out:fly={{ y: -32, duration: 220, easing: cubicOut }}
 			>
-				{heading}
-			</h1>
-			<p class="mt-4 max-w-md text-lg text-mute">{sub}</p>
-		</section>
-
-		<section class="rounded-[28px] bg-card p-6 md:p-10">
-			{#if done && draft.goal !== null}
-				<article>
-					{#if draft.coverUrl}
-						<img
-							src={draft.coverUrl}
-							alt=""
-							class="mb-6 h-56 w-full rounded-2xl object-cover"
-						/>
-					{/if}
-					<p class="font-ui text-sm font-medium text-coin">{formatGoal(draft.goal)} goal</p>
-					<h2 class="font-display mt-2 text-3xl font-bold tracking-tight">{draft.title}</h2>
-					<p class="mt-4 whitespace-pre-wrap text-mute">{draft.story}</p>
-				</article>
-			{:else if step === 1}
-				<div>
-					<label class="font-ui text-sm font-medium text-mute" for="goal">Goal</label>
-					<div class="field-solid-affix">
-						<span class="font-display text-3xl font-extrabold text-coin" aria-hidden="true">Ksh</span>
+				{#if done || step === LAST}
+					<!-- Receipt -->
+					<section class="ml-8 md:ml-14 rounded-3xl rounded-tl-lg bg-card px-6 pt-5 pb-2" aria-label="Your draft">
+						{#if done}
+							<p class="mb-4 inline-flex items-center gap-2 text-xl font-extrabold text-accent">
+								<svg viewBox="0 0 20 20" class="h-6 w-6" fill="currentColor" aria-hidden="true">
+									<path d="M10 0a10 10 0 1 0 0 20A10 10 0 0 0 10 0Zm4.7 7.7-5.5 5.5a1 1 0 0 1-1.4 0L5.3 10.7a1 1 0 1 1 1.4-1.4L8.5 11l4.8-4.8a1 1 0 0 1 1.4 1.4Z" />
+								</svg>
+								Draft confirmed
+							</p>
+						{/if}
+						{#if draft.coverUrl}
+							<img src={draft.coverUrl} alt="Your cover" class="mb-4 h-56 w-full rounded-2xl object-cover" />
+						{/if}
+						{#snippet goalVal()}<p class="text-3xl font-extrabold tracking-[-0.02em]">{draft.goal !== null ? formatGoal(draft.goal) : '—'}</p>{/snippet}
+						{#snippet photoVal()}<p class="truncate text-base">{draft.coverName || 'None added'}</p>{/snippet}
+						{#snippet titleVal()}<p class="text-xl font-bold">{draft.title}</p>{/snippet}
+						{#snippet storyVal()}<p class="whitespace-pre-wrap text-base leading-relaxed">{draft.story}</p>{/snippet}
+						{@render receiptRow('Goal', 1, goalVal)}
+						{@render receiptRow('Cover photo', 2, photoVal)}
+						{@render receiptRow('Title', 3, titleVal)}
+						{@render receiptRow('Story', 4, storyVal)}
+					</section>
+				{:else if step === 1}
+					<label
+						class="compose-card ml-15 flex items-baseline gap-3 rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent"
+					>
+						<span class="sr-only">Goal in Kenyan shillings</span>
+						<span class="text-2xl font-extrabold text-accent md:text-3xl" aria-hidden="true">Ksh</span>
 						<input
-							id="goal"
-							class="font-display w-full border-0 bg-transparent p-0 text-6xl font-extrabold tracking-tight focus:ring-0"
+							class="field-bare text-[3.5rem] leading-none font-extrabold tracking-[-0.03em] md:text-6xl"
 							inputmode="numeric"
 							autocomplete="off"
 							placeholder="0"
 							value={goalText}
 							oninput={(e) => parseGoal(e.currentTarget.value)}
+							onkeydown={onEnter}
 						/>
+					</label>
+					<div class="ml-15 flex flex-wrap gap-2" role="group" aria-label="Suggested goals">
+						{#each SUGGESTED as amount (amount)}
+							<button
+								type="button"
+								class="rounded-full border-2 px-5 py-2.5 text-base font-bold transition-colors {draft.goal === amount
+									? 'border-accent bg-accent text-card'
+									: 'border-line bg-card text-accent hover:border-accent'}"
+								aria-pressed={draft.goal === amount}
+								onclick={() => pickSuggested(amount)}
+							>
+								{formatGoal(amount)}
+							</button>
+						{/each}
 					</div>
-				</div>
-				<div class="mt-6 flex flex-wrap gap-2">
-					{#each SUGGESTED as amount (amount)}
-						<button
-							type="button"
-							class="font-ui rounded-full border px-4 py-2 text-sm {draft.goal === amount
-								? 'border-accent bg-accent text-ink'
-								: 'border-line bg-white'}"
-							onclick={() => pickSuggested(amount)}
-						>
-							{formatGoal(amount)}
-						</button>
-					{/each}
-				</div>
-			{:else if step === 2}
-				<input
-					bind:this={fileInput}
-					class="sr-only"
-					type="file"
-					accept="image/jpeg,image/png,image/webp"
-					onchange={onFileChange}
-				/>
-				{#if draft.coverUrl}
-					<div class="overflow-hidden rounded-2xl">
-						<img src={draft.coverUrl} alt="" class="h-72 w-full object-cover" />
-					</div>
-					<p class="font-ui mt-3 text-sm text-mute">{draft.coverName}</p>
-					<button
-						type="button"
-						class="font-ui mt-4 text-sm font-medium underline underline-offset-4"
-						onclick={() => fileInput?.click()}
-					>
-						Change photo
-					</button>
-				{:else}
-					<button
-						type="button"
-						class="flex h-72 w-full flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center {dragging
-							? 'border-accent bg-white'
+				{:else if step === 2}
+					<input
+						bind:this={fileInput}
+						class="sr-only"
+						type="file"
+						accept="image/jpeg,image/png,image/webp"
+						onchange={onFileChange}
+					/>
+					<div
+						class="compose-card ml-15 overflow-hidden rounded-3xl rounded-tr-lg border-2 bg-card transition-colors duration-150 {dragging
+							? 'border-accent'
 							: 'border-line'}"
-						onclick={() => fileInput?.click()}
+						role="presentation"
 						ondragover={(e) => {
 							e.preventDefault();
 							dragging = true;
@@ -349,314 +344,115 @@
 						ondragleave={() => (dragging = false)}
 						ondrop={onDrop}
 					>
-						<span class="font-display text-2xl font-bold">Drop a photo here</span>
-						<span class="font-ui mt-2 text-sm text-mute">or click to choose one</span>
-					</button>
-				{/if}
-				{#if coverError}
-					<p class="font-ui mt-4 text-sm text-accent-ink" role="alert">{coverError}</p>
-				{/if}
-				<div class="mt-6">{@render photoTip()}</div>
-			{:else if step === 3}
-				<label class="block" for="title">
-					<span class="font-ui text-sm font-medium text-mute">Title</span>
-					<input
-						id="title"
-						class="field-solid text-2xl"
-						maxlength="80"
-						placeholder="Donate to help..."
-						bind:value={draft.title}
-					/>
-				</label>
-				<div class="mt-5">{@render titleTip()}</div>
-				<label class="mt-8 block" for="story">
-					<span class="font-ui text-sm font-medium text-mute">Story</span>
-					<textarea
-						id="story"
-						class="field-solid min-h-48 resize-none"
-						maxlength="4000"
-						placeholder="Who this is for, what happened, and how the money will be used."
-						bind:value={draft.story}
-					></textarea>
-				</label>
-				<p class="font-ui mt-2 text-right text-xs text-mute">{draft.story.length} / 4000</p>
-				<div class="mt-5">{@render storyTips()}</div>
-			{:else}
-				<div class="flex items-center justify-between gap-4">
-					<div class="flex min-w-0 items-center gap-4">
 						{#if draft.coverUrl}
-							<img
-								src={draft.coverUrl}
-								alt=""
-								class="h-16 w-24 shrink-0 rounded-xl object-cover"
-							/>
+							<img src={draft.coverUrl} alt="Your cover" class="h-72 w-full object-cover" />
+							<div class="flex items-center justify-between gap-4 px-5 py-4">
+								<p class="min-w-0 truncate text-sm text-mute">{draft.coverName}</p>
+								<button
+									type="button"
+									class="shrink-0 rounded-full border-2 border-line px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
+									onclick={() => fileInput?.click()}
+								>
+									Change
+								</button>
+							</div>
+						{:else}
+							<button
+								type="button"
+								class="flex h-72 w-full flex-col items-center justify-center gap-3 px-6 text-center"
+								onclick={() => fileInput?.click()}
+							>
+								<span class="inline-flex h-14 w-14 items-center justify-center rounded-full bg-sun text-accent">
+									<svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+										<path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3M12 4v11M7.5 8.5 12 4l4.5 4.5" />
+									</svg>
+								</span>
+								<span class="text-xl font-extrabold">Choose a photo</span>
+								<span class="text-sm text-mute">or drop one here · JPG, PNG, WebP · up to 8 MB</span>
+							</button>
 						{/if}
-						<div class="min-w-0">
-							<p class="font-ui text-xs font-medium tracking-wide text-mute uppercase">
-								Cover photo
-							</p>
-							<p class="font-ui mt-1 truncate text-sm">{draft.coverName || 'None added'}</p>
-						</div>
 					</div>
-					<button
-						type="button"
-						class="font-ui shrink-0 text-sm font-medium underline underline-offset-4"
-						onclick={() => openEdit('photo')}
+					{#if coverError}
+						<p class="ml-15 text-sm font-medium text-error" role="alert">{coverError}</p>
+					{/if}
+				{:else if step === 3}
+					<label
+						class="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent"
 					>
-						Edit
-					</button>
-				</div>
-				<div class="mt-8 flex items-start justify-between gap-4">
-					<div>
-						<p class="font-ui text-xs font-medium tracking-wide text-mute uppercase">Goal</p>
-						<p class="font-display mt-1 text-3xl font-bold">
-							{draft.goal !== null ? formatGoal(draft.goal) : '—'}
-						</p>
-					</div>
-					<button
-						type="button"
-						class="font-ui text-sm font-medium underline underline-offset-4"
-						onclick={() => openEdit('goal')}
+						<span class="sr-only">Title</span>
+						<input
+							class="field-bare text-2xl font-bold tracking-[-0.01em] md:text-3xl"
+							maxlength="80"
+							placeholder="Help Maya get home"
+							bind:value={draft.title}
+							onkeydown={onEnter}
+						/>
+						<span class="mt-2 block text-right text-xs font-medium text-mute">{draft.title.length} / 80</span>
+					</label>
+				{:else if step === 4}
+					<label
+						class="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent"
 					>
-						Edit
-					</button>
-				</div>
-				<div class="mt-8 flex items-start justify-between gap-4">
-					<div class="min-w-0">
-						<p class="font-ui text-xs font-medium tracking-wide text-mute uppercase">Title</p>
-						<p class="mt-1 text-xl">{draft.title}</p>
-					</div>
-					<button
-						type="button"
-						class="font-ui shrink-0 text-sm font-medium underline underline-offset-4"
-						onclick={() => openEdit('title')}
-					>
-						Edit
-					</button>
-				</div>
-				<div class="mt-8 flex items-start justify-between gap-4">
-					<div class="min-w-0">
-						<p class="font-ui text-xs font-medium tracking-wide text-mute uppercase">Story</p>
-						<p class="mt-1 whitespace-pre-wrap text-mute">{draft.story}</p>
-					</div>
-					<button
-						type="button"
-						class="font-ui shrink-0 text-sm font-medium underline underline-offset-4"
-						onclick={() => openEdit('story')}
-					>
-						Edit
-					</button>
-				</div>
-			{/if}
-		</section>
-	</div>
+						<span class="sr-only">Story</span>
+						<textarea
+							class="field-bare min-h-56 resize-none text-lg leading-relaxed [field-sizing:content]"
+							maxlength="4000"
+							placeholder="Hi, I’m Jane. I’m raising money for…"
+							bind:value={draft.story}
+						></textarea>
+						<span class="mt-2 block text-right text-xs font-medium text-mute">{draft.story.length} / 4000</span>
+					</label>
+				{/if}
+			</div>
+		{/key}
+	</main>
 
-	<footer
-		class="sticky bottom-0 flex items-center justify-between border-t border-line/70 bg-paper/90 px-6 py-4 backdrop-blur md:px-10"
-	>
-		{#if done}
-			<button type="button" class="font-ui text-sm font-medium" onclick={() => (done = false)}>
-				Back to review
-			</button>
-			<a
-				href="/create"
-				class="font-ui rounded-full bg-accent px-6 py-3 text-sm font-semibold text-ink hover:bg-accent-deep hover:text-card"
-				onclick={startOver}
-			>
-				Start another
-			</a>
-		{:else}
-			{#if step === 1}
-				<a href="/" class="font-ui text-sm font-medium text-mute">Cancel</a>
+	<footer class="fixed inset-x-0 bottom-0 border-t-2 border-line bg-paper/95 backdrop-blur">
+		<div class="mx-auto flex w-full max-w-[40rem] items-center justify-between gap-4 px-4 py-4">
+			{#if done}
+				<button type="button" class="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink" onclick={goBack}>
+					Back
+				</button>
+				<a href="/create" class="btn-press bg-accent text-card hover:bg-accent-deep" onclick={startOver}>
+					Start another
+				</a>
 			{:else}
-				<button type="button" class="font-ui text-sm font-medium" onclick={goBack}>Back</button>
+				{#if step === 1}
+					<a href="/" class="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink">
+						Cancel
+					</a>
+				{:else}
+					<button type="button" class="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink" onclick={goBack}>
+						Back
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="btn-press min-w-40 {canContinue ? 'bg-accent text-card hover:bg-accent-deep' : 'bg-line text-mute'}"
+					disabled={!canContinue}
+					onclick={goNext}
+				>
+					{step === LAST ? 'Looks good' : 'Continue'}
+				</button>
 			{/if}
-			<button
-				type="button"
-				class="font-ui rounded-full px-6 py-3 text-sm font-semibold {canContinue
-					? 'bg-accent text-ink hover:bg-accent-deep hover:text-card'
-					: 'cursor-not-allowed bg-line text-mute'}"
-				disabled={!canContinue}
-				onclick={goNext}
-			>
-				{step === 4 ? 'Looks good' : 'Continue'}
-			</button>
-		{/if}
+		</div>
 	</footer>
 </div>
 
-{#if editing}
-	<dialog
-		bind:this={dialogEl}
-		class="fixed inset-0 m-auto max-h-[85dvh] w-[min(92vw,34rem)] overflow-y-auto rounded-[28px] bg-card p-6 shadow-[0_24px_60px_-12px_rgb(20_26_34/0.35)] backdrop:bg-ink/45 md:p-8"
-		onclose={() => (editing = null)}
-		onclick={(e) => {
-			if (e.target === e.currentTarget) dialogEl?.close();
-		}}
-	>
-		<div class="flex items-center justify-between gap-4">
-			<h2 class="font-display text-2xl font-extrabold tracking-tight">{editHeading}</h2>
-			<button
-				type="button"
-				aria-label="Close"
-				class="rounded-full p-2 text-mute transition-colors hover:bg-line/40 hover:text-ink"
-				onclick={() => dialogEl?.close()}
-			>
-				<svg
-					viewBox="0 0 16 16"
-					class="h-4 w-4"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.8"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="M3 3l10 10M13 3L3 13" />
-				</svg>
-			</button>
-		</div>
-
-		<div class="mt-6">
-			{#if editing === 'goal'}
-				<div>
-					<label class="font-ui text-sm font-medium text-mute" for="edit-goal">Goal</label>
-					<div class="field-solid-affix">
-						<span class="font-display text-2xl font-extrabold text-coin" aria-hidden="true">Ksh</span>
-						<input
-							id="edit-goal"
-							bind:this={editGoalInput}
-							class="font-display w-full border-0 bg-transparent p-0 text-4xl font-extrabold tracking-tight focus:ring-0"
-							inputmode="numeric"
-							autocomplete="off"
-							placeholder="0"
-							value={editGoalText}
-							oninput={(e) => parseEditGoal(e.currentTarget.value)}
-							onkeydown={(e) => {
-								if (e.key === 'Enter') {
-									e.preventDefault();
-									saveEdit();
-								}
-							}}
-						/>
-					</div>
-				</div>
-				<div class="mt-4 flex flex-wrap gap-2">
-					{#each SUGGESTED as amount (amount)}
-						<button
-							type="button"
-							class="font-ui rounded-full border px-3.5 py-1.5 text-sm {editGoalAmount === amount
-								? 'border-accent bg-accent text-ink'
-								: 'border-line bg-white'}"
-							onclick={() => (editGoalText = amount.toLocaleString('en-KE'))}
-						>
-							{formatGoal(amount)}
-						</button>
-					{/each}
-				</div>
-			{:else if editing === 'photo'}
-				<input
-					bind:this={editFileInput}
-					class="sr-only"
-					type="file"
-					accept="image/jpeg,image/png,image/webp"
-					onchange={onEditFileChange}
-				/>
-				{#if draft.coverUrl}
-					<div class="overflow-hidden rounded-2xl">
-						<img src={draft.coverUrl} alt="" class="h-44 w-full object-cover" />
-					</div>
-				{/if}
-				<button
-					type="button"
-					class="mt-4 flex h-32 w-full flex-col items-center justify-center rounded-2xl border border-dashed px-6 text-center {dragging
-						? 'border-accent bg-white'
-						: 'border-line'}"
-					onclick={() => editFileInput?.click()}
-					ondragover={(e) => {
-						e.preventDefault();
-						dragging = true;
-					}}
-					ondragleave={() => (dragging = false)}
-					ondrop={onEditDrop}
-				>
-					<span class="font-display text-lg font-bold">
-						{draft.coverUrl ? 'Drop a new photo' : 'Drop a photo here'}
-					</span>
-					<span class="font-ui mt-1 text-sm text-mute">or click to choose one</span>
-				</button>
-				{#if coverError}
-					<p class="font-ui mt-4 text-sm text-accent-ink" role="alert">{coverError}</p>
-				{/if}
-				<div class="mt-5">{@render photoTip()}</div>
-			{:else if editing === 'title'}
-				<label class="block">
-					<span class="font-ui text-sm font-medium text-mute">Title</span>
-					<input
-						bind:this={editTitleInput}
-						aria-label="Title"
-						class="field-solid text-xl"
-						maxlength="80"
-						placeholder="Donate to help..."
-						bind:value={editTitle}
-						onkeydown={(e) => {
-							if (e.key === 'Enter') {
-								e.preventDefault();
-								saveEdit();
-							}
-						}}
-					/>
-				</label>
-				<div class="mt-4">{@render titleTip()}</div>
-			{:else if editing === 'story'}
-				<label class="block">
-					<span class="font-ui text-sm font-medium text-mute">Story</span>
-					<textarea
-						bind:this={editStoryArea}
-						aria-label="Story"
-						class="field-solid min-h-40 resize-none"
-						maxlength="4000"
-						placeholder="Who this is for, what happened, and how the money will be used."
-						bind:value={editStory}
-					></textarea>
-				</label>
-				<p class="font-ui mt-2 text-right text-xs text-mute">{editStory.length} / 4000</p>
-				<div class="mt-4">{@render storyTips()}</div>
-			{/if}
-		</div>
-
-		<div class="mt-8 flex items-center justify-end gap-3">
-			<button
-				type="button"
-				class="font-ui rounded-full border border-line bg-white px-5 py-2.5 text-sm font-medium"
-				onclick={() => dialogEl?.close()}
-			>
-				Cancel
-			</button>
-			{#if editing !== 'photo'}
-				<button
-					type="button"
-					class="font-ui rounded-full px-5 py-2.5 text-sm font-semibold {canSaveEdit
-						? 'bg-accent text-ink hover:bg-accent-deep hover:text-card'
-						: 'cursor-not-allowed bg-line text-mute'}"
-					disabled={!canSaveEdit}
-					onclick={saveEdit}
-				>
-					Save
-				</button>
-			{/if}
-		</div>
-	</dialog>
-{/if}
-
 <style>
-	dialog[open] {
-		animation: edit-in 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+	.sending-draft :global(.compose-card) {
+		background-color: var(--color-accent);
+		border-color: var(--color-accent);
+		color: var(--color-card);
 	}
-
-	@keyframes edit-in {
-		from {
-			opacity: 0;
-			transform: translateY(12px) scale(0.98);
-		}
+	.sending-draft :global(.compose-card input),
+	.sending-draft :global(.compose-card textarea),
+	.sending-draft :global(.compose-card .text-accent) {
+		color: var(--color-card);
+	}
+	.sending-draft :global([role='group'] button) {
+		background-color: var(--color-accent);
+		border-color: var(--color-accent-deep);
+		color: var(--color-card);
 	}
 </style>

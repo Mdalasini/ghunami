@@ -1,23 +1,30 @@
 @import 'tailwindcss';
-@plugin '@tailwindcss/forms';
+@plugin "@tailwindcss/forms";
+
+/* Rubik variable (wght 300–900), latin subset. Source: github.com/google/fonts ofl/rubik, OFL-1.1. */
+@font-face {
+	font-family: "Rubik";
+	font-style: normal;
+	font-weight: 300 900;
+	font-display: optional;
+	src: url("/fonts/rubik-latin.woff2") format("woff2");
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
 @theme {
-	--font-display: 'Nunito', ui-rounded, system-ui, sans-serif;
-	--font-body: 'Hanken Grotesk', system-ui, sans-serif;
-	--font-ui: 'Hanken Grotesk', system-ui, sans-serif;
-	--color-ink: #1b1b1b;
-	--color-paper: #fff6e0;
+	--font-display: 'Rubik', system-ui, sans-serif;
+	--font-body: 'Rubik', system-ui, sans-serif;
+	--font-ui: 'Rubik', system-ui, sans-serif;
+	--color-ink: #0f1a12;
+	--color-paper: #eef3ee;
 	--color-card: #ffffff;
-	--color-sun: #ffe8a3;
-	--color-accent: #d9a441;
-	--color-accent-deep: #8b5a14;
-	--color-slate: #2e4057;
-	--color-terra: #d9754f;
-	--color-accent-ink: #9c4a2c;
-	--color-coin: #8b5a14;
-	--color-mute: #2e4057;
-	--color-hint: #7d6848;
-	--color-line: #e8d4a0;
+	--color-sun: #d6ead9;
+	--color-accent: #15803d;
+	--color-accent-deep: #116232;
+	--color-mute: #4b5e52;
+	--color-hint: #66796c;
+	--color-line: #cdd9cf;
+	--color-error: #c62828;
 }
 
 html,
@@ -26,16 +33,19 @@ body {
 	background: var(--color-paper);
 	color: var(--color-ink);
 	font-family: var(--font-body);
+	font-feature-settings: 'tnum';
 }
 
 body {
 	margin: 0;
 }
 
-button,
-input,
-textarea {
-	font: inherit;
+@layer base {
+	button,
+	input,
+	textarea {
+		font: inherit;
+	}
 }
 
 ::selection {
@@ -45,7 +55,7 @@ textarea {
 
 input,
 textarea {
-	caret-color: var(--color-accent-deep);
+	caret-color: var(--color-accent);
 }
 
 * {
@@ -57,30 +67,30 @@ textarea {
 	opacity: 1;
 }
 
-@utility field-solid {
-	@apply mt-1 block w-full rounded-md border-transparent bg-paper;
+/* Bare field: the surrounding bubble carries the border and focus state. */
+@utility field-bare {
+	@apply block w-full border-0 bg-transparent p-0 focus:ring-0;
 }
 
-@utility field-solid-affix {
-	@apply mt-1 flex items-baseline gap-2 rounded-md border border-transparent bg-paper px-3 py-2;
+/* Duolingo-style pressable button: solid darker bottom edge that presses in. */
+@utility btn-press {
+	@apply font-ui inline-flex items-center justify-center rounded-full px-7 text-sm font-extrabold tracking-wider uppercase transition-[transform,box-shadow] duration-100;
+	height: 3.25rem;
+	box-shadow: 0 4px 0 0 var(--btn-edge, var(--color-accent-deep));
 }
 
-.field-solid:focus {
-	border-color: var(--color-slate);
-	background-color: #fff;
-	--tw-ring-inset: ;
-	--tw-ring-offset-width: 0px;
-	--tw-ring-shadow: 0 0 #0000;
+.btn-press:active:not(:disabled) {
+	transform: translateY(4px);
+	box-shadow: 0 0 0 0 var(--btn-edge, var(--color-accent-deep));
+}
+
+.btn-press:disabled {
 	box-shadow: none;
-}
-
-.field-solid-affix:focus-within {
-	border-color: var(--color-slate);
-	background-color: #fff;
+	cursor: not-allowed;
 }
 
 :focus-visible:not(input):not(textarea):not(select) {
-	outline: 2px solid var(--color-ink);
+	outline: 3px solid var(--color-accent);
 	outline-offset: 3px;
 }
 

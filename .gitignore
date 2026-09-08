@@ -21,3 +21,11 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Impeccable run artifacts (keep config, surfaces, design sidecar)
+.impeccable/review/
+.impeccable/questions/
+.impeccable/build/
+.impeccable/mocks/
+.impeccable/live/sessions/
+.impeccable/config.local.json

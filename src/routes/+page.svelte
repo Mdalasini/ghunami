@@ -29,18 +29,13 @@
 	</header>
 
 	<main class="mx-auto flex max-w-3xl flex-col items-center pt-28 text-center md:pt-36">
-		<p class="font-ui text-xs font-medium tracking-[0.18em] text-mute uppercase">Fundraising</p>
 		<h1 class="font-display mt-4 text-5xl leading-[1.05] font-extrabold tracking-tight md:text-7xl">
-			Start with the number. The story comes next.
+		    You don't have to stand alone.
 		</h1>
-		<p class="mt-6 max-w-lg text-lg text-mute">
-			Set a goal, add a photo, write it plainly. You can review everything before anyone else sees
-			it.
-		</p>
 		<a
 			href="/create"
 			onclick={start}
-			class="font-ui mt-10 rounded-full bg-accent px-8 py-3.5 text-sm font-semibold text-ink hover:bg-accent-deep hover:text-card"
+			class="btn-press mt-10 bg-accent px-8 text-card hover:bg-accent-deep"
 		>
 			Start a fundraiser
 		</a>
