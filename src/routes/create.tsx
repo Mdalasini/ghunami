@@ -3,12 +3,11 @@ import {
 	type DragEvent,
 	type KeyboardEvent,
 	type ReactNode,
-	useEffect,
 	useRef,
 	useState,
 	useSyncExternalStore
 } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { HorizonMark, Tip } from '../components/Tip';
 import {
 	formatGoal,
@@ -94,7 +93,11 @@ function ReceiptRow({
 	);
 }
 
-export default function CreatePage() {
+export function meta() {
+	return [{ title: 'Start a fundraiser · Ghunami' }];
+}
+
+export default function Create() {
 	const draft = useSyncExternalStore(subscribeDraft, getDraft, getDraft);
 	const [step, setStep] = useState(1);
 	const [done, setDone] = useState(false);
@@ -121,10 +124,6 @@ export default function CreatePage() {
 
 	const heading = done ? 'Saved in this browser' : currentStep.q;
 	const sub = done ? 'Nothing is public yet. This is your draft.' : currentStep.sub;
-
-	useEffect(() => {
-		document.title = 'Start a fundraiser · Ghunami';
-	}, []);
 
 	function parseGoal(value: string) {
 		const digits = value.replace(/[^\d]/g, '');
