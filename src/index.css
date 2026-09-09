@@ -184,3 +184,71 @@ textarea {
 		transition-duration: 0.01ms !important;
 	}
 }
+
+/* Sign-in: the recognised-email chip and its left-to-right letter wave. */
+@keyframes chip-in {
+	from {
+		opacity: 0;
+		transform: scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes letter-hop {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	45% {
+		transform: translateY(-5px);
+	}
+}
+
+.chip-in {
+	animation: chip-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+/* Each glyph is its own inline-block so the stagger reads as a wave. */
+.letter-hop {
+	display: inline-block;
+	white-space: pre;
+	animation: letter-hop 460ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+@keyframes reveal {
+	from {
+		opacity: 0;
+		transform: translateY(-8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.reveal {
+	animation: reveal 260ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+@keyframes check-pip {
+	0%,
+	100% {
+		opacity: 0.28;
+		transform: translateY(-50%) scale(0.85);
+	}
+	50% {
+		opacity: 1;
+		transform: translateY(-50%) scale(1);
+	}
+}
+
+.check-pip {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	animation: check-pip 1.3s ease-in-out infinite;
+}

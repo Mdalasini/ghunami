@@ -9,6 +9,7 @@ import {
 	ScrollRestoration
 } from 'react-router';
 import type { Route } from './+types/root';
+import { ConvexClientProvider } from './components/ConvexClientProvider';
 import { HorizonMark } from './components/Tip';
 import './index.css';
 
@@ -58,7 +59,11 @@ export function HydrateFallback() {
 }
 
 export default function App() {
-	return <Outlet />;
+	return (
+		<ConvexClientProvider>
+			<Outlet />
+		</ConvexClientProvider>
+	);
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
