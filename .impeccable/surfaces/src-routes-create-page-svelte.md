@@ -1,8 +1,8 @@
 ---
 version: 1
 slug: "src-routes-create-page-svelte"
-primary_target: "src/routes/create/+page.svelte"
-related_targets: ["src/lib/create/Tip.svelte"]
+primary_target: "src/pages/CreatePage.tsx"
+related_targets: ["src/components/Tip.tsx"]
 ---
 
 # Create flow — /create
