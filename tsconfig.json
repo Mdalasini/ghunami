@@ -1,4 +1,5 @@
 {
+	"include": ["**/*", ".react-router/types/**/*"],
 	"compilerOptions": {
 		"target": "esnext",
 		"lib": ["esnext", "DOM", "DOM.Iterable"],
@@ -19,7 +20,10 @@
 		"noUnusedParameters": true,
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
-		"types": ["vite/client"]
-	},
-	"include": ["src"]
+		"rootDirs": [".", "./.react-router/types"],
+		"types": ["node", "vite/client"],
+		"paths": {
+			"~/*": ["./src/*"]
+		}
+	}
 }

@@ -1,15 +1,14 @@
 import type { MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router';
 import logo from '../assets/logo.svg';
 import { resetDraft } from '../lib/draft';
 
-export default function HomePage() {
-	const navigate = useNavigate();
+export function meta() {
+	return [{ title: 'Ghunami' }];
+}
 
-	useEffect(() => {
-		document.title = 'Ghunami';
-	}, []);
+export default function Home() {
+	const navigate = useNavigate();
 
 	function start(event: MouseEvent<HTMLAnchorElement>) {
 		event.preventDefault();
