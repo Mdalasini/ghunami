@@ -69,34 +69,12 @@ export const me = query({
 	}
 });
 
-/**
- * Backs the debounced check on the sign-in screen: does this email already have
- * an account? Only users who have completed a sign-in at least once are in this
- * table (that is when `storeUser` writes the row), so a WorkOS user who never
- * finished one reads as new — they land in the sign-up branch and the magic
- * code logs them into their existing WorkOS account anyway.
- */
-export const emailExists = query({
-	args: { email: v.string() },
-	returns: v.boolean(),
-	handler: async (ctx, args) => {
-		const email = args.email.trim().toLowerCase();
-		if (!email.includes('@')) {
-			return false;
-		}
-		const user = await ctx.db
-			.query('users')
-			.withIndex('by_email', (q) => q.eq('email', email))
-			.first();
-		return user !== null;
-	}
-});
 
 /**
  * Written the moment WorkOS confirms an authentication, which is the only point
  * where we hold a *verified* email — the access token itself carries no `email`
- * claim, so `storeUser` alone would leave the column blank and every address
- * would read as new on the sign-in screen. Internal: the caller must have
+ * claim, so `storeUser` alone would leave the column blank.
+ * Internal: the caller must have
  * already authenticated against WorkOS.
  */
 export const upsertFromWorkOS = internalMutation({

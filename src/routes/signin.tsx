@@ -1,4 +1,4 @@
-import { useQuery } from 'convex/react';
+
 import { useEffect, useRef, useState } from 'react';
 import {
 	redirect,
@@ -15,7 +15,7 @@ import { safeReturnTo } from '../lib/returnTo';
 import { readSession, sessionCookie } from '../lib/session.server';
 
 const CODE_LENGTH = 6;
-const CHECK_DELAY = 450;
+
 
 /** Deliberately loose — WorkOS is the real authority on deliverability. */
 function isEmail(value: string): boolean {
@@ -69,22 +69,6 @@ export async function action({ request }: ActionFunctionArgs) {
 	return { error: 'Something went wrong. Try again.' };
 }
 
-/** Splits text into per-glyph spans so the hop reads left to right. */
-function Wave({ text, from = 0 }: { text: string; from?: number }) {
-	return (
-		<>
-			{[...text].map((glyph, index) => (
-				<span
-					key={`${index}-${glyph}`}
-					className="letter-hop"
-					style={{ animationDelay: `${(from + index) * 26}ms` }}
-				>
-					{glyph}
-				</span>
-			))}
-		</>
-	);
-}
 
 function Field({
 	label,
@@ -110,7 +94,7 @@ export default function SignIn() {
 	const fetcher = useFetcher<typeof action>();
 
 	const [email, setEmail] = useState('');
-	const [settled, setSettled] = useState('');
+	const [isNew, setIsNew] = useState(false);
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
 	const [phase, setPhase] = useState<'email' | 'code'>('email');
@@ -119,23 +103,6 @@ export default function SignIn() {
 
 	const valid = isEmail(email);
 
-	// Nothing is checked until typing stops — no Enter, no submit.
-	useEffect(() => {
-		if (!valid) {
-			setSettled('');
-			return;
-		}
-		const timer = setTimeout(() => setSettled(email.trim().toLowerCase()), CHECK_DELAY);
-		return () => clearTimeout(timer);
-	}, [email, valid]);
-
-	const exists = useQuery(api.users.emailExists, settled ? { email: settled } : 'skip');
-	// A result only counts once it belongs to the address in the box; otherwise
-	// editing a checked email would keep showing the previous verdict.
-	const answered = valid && settled === email.trim().toLowerCase() && exists !== undefined;
-	const checking = valid && !answered;
-	const known = answered && exists === true;
-	const isNew = answered && exists === false;
 
 	const busy = fetcher.state !== 'idle';
 	const error = fetcher.data && 'error' in fetcher.data ? fetcher.data.error : null;
@@ -191,16 +158,10 @@ export default function SignIn() {
 		}
 	}
 
-	function reset() {
-		setEmail('');
-		setSettled('');
-		setFirstName('');
-		setLastName('');
-	}
 
 	const namesReady = firstName.trim().length > 0 && lastName.trim().length > 0;
-	const canSubmit = valid && !checking && !busy && (known || (isNew && namesReady));
-	const label = known ? 'Log in' : isNew ? 'Sign up' : 'Continue';
+	const canSubmit = valid && !busy && (!isNew || namesReady);
+	const label = isNew ? 'Sign up' : 'Log in';
 
 	if (phase === 'code') {
 		return (
@@ -218,57 +179,29 @@ export default function SignIn() {
 	}
 
 	return (
-		<AuthShell title="Welcome to ghunami" sub="Log in or sign up to get started.">
-			{known ? (
-				<div className="chip-in flex items-center gap-3 rounded-3xl bg-sun px-3 py-3">
-					<span
-						className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-extrabold text-card"
-						aria-hidden="true"
-					>
-						<Wave text={(email.trim()[0] ?? '').toUpperCase()} />
-					</span>
-					<span className="min-w-0 flex-1 truncate text-base font-medium text-accent-deep">
-						<Wave text={email.trim()} from={1} />
-					</span>
-					<button
-						type="button"
-						onClick={reset}
-						className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-accent-deep hover:bg-card"
-						aria-label="Use a different email"
-					>
-						<svg
-							viewBox="0 0 20 20"
-							className="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2.5"
-							strokeLinecap="round"
-							aria-hidden="true"
-						>
-							<path d="M5 5l10 10M15 5L5 15" />
-						</svg>
-					</button>
-				</div>
-			) : (
-				<div className="relative">
-					<Field
-						label="Email"
-						type="email"
-						name="email"
-						autoComplete="email"
-						autoFocus
-						inputMode="email"
-						value={email}
-						onChange={(event) => setEmail(event.currentTarget.value)}
-					/>
-					{checking && (
-						<span
-							className="check-pip absolute top-1/2 right-5"
-							aria-hidden="true"
-						/>
-					)}
-				</div>
-			)}
+		<AuthShell
+					title={isNew ? 'Sign up for ghunami' : 'Log in to ghunami'}
+					sub={isNew ? 'Create an account to get started.' : 'Welcome back. Log in to your account.'}
+				>
+			<Field
+				label="Email"
+				type="email"
+				name="email"
+				autoComplete="email"
+				autoFocus
+				inputMode="email"
+				value={email}
+				onChange={(event) => setEmail(event.currentTarget.value)}
+			/>
+
+			<button
+				type="button"
+				onClick={() => setIsNew(!isNew)}
+				disabled={busy}
+				className="px-2 text-sm font-medium text-accent-deep underline"
+			>
+				{isNew ? 'Already have an account? Log in' : 'New here? Sign up'}
+			</button>
 
 			{isNew && (
 				<div className="flex flex-col gap-3">
