@@ -1,5 +1,6 @@
 import { ConvexProviderWithAuth, useConvexAuth, useMutation } from 'convex/react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useFetchers, useLocation } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { convex } from '../lib/convex';
 
@@ -34,6 +35,15 @@ function readToken(force: boolean): Promise<string | null> {
 	return inflight;
 }
 
+/** Login and sign-out go through fetchers; the cookie changes, the tree does not remount. */
+function sessionWriteInFlight(fetchers: ReturnType<typeof useFetchers>): boolean {
+	return fetchers.some((fetcher) => {
+		if (fetcher.state === 'idle') return false;
+		const action = fetcher.formAction ?? '';
+		return action.includes('/signin') || action.includes('/auth/signout');
+	});
+}
+
 /**
  * Convex's auth seam. The session itself lives in an httpOnly cookie the
  * browser cannot read, so the access token is fetched from our own route rather
@@ -41,19 +51,32 @@ function readToken(force: boolean): Promise<string | null> {
  */
 function useServerAuth() {
 	const [token, setToken] = useState<string | null | undefined>(undefined);
+	const location = useLocation();
+	const writing = sessionWriteInFlight(useFetchers());
 
 	useEffect(() => {
+		if (writing) return;
 		let cancelled = false;
-		void readToken(false).then((value) => {
+		// Cookie may have just changed — do not reuse a request from the old session.
+		inflight = requestToken(false).finally(() => {
+			inflight = null;
+		});
+		void inflight.then((value) => {
 			if (!cancelled) setToken(value);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+		// location.key: login redirects off /signin and unmounts that fetcher.
+		// writing: sign-out posts while already on /, so the URL never changes.
+	}, [location.key, writing]);
 
 	const fetchAccessToken = useCallback(
-		({ forceRefreshToken }: { forceRefreshToken: boolean }) => readToken(forceRefreshToken),
+		async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
+			const value = await readToken(forceRefreshToken);
+			setToken(value);
+			return value;
+		},
 		[]
 	);
 
