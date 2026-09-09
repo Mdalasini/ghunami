@@ -86,15 +86,6 @@ function Wave({ text, from = 0 }: { text: string; from?: number }) {
 	);
 }
 
-function Spinner() {
-	return (
-		<span
-			className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent"
-			aria-hidden="true"
-		/>
-	);
-}
-
 function Field({
 	label,
 	className = '',
@@ -271,9 +262,10 @@ export default function SignIn() {
 						onChange={(event) => setEmail(event.currentTarget.value)}
 					/>
 					{checking && (
-						<span className="absolute top-1/2 right-5 -translate-y-1/2">
-							<Spinner />
-						</span>
+						<span
+							className="check-pip absolute top-1/2 right-5"
+							aria-hidden="true"
+						/>
 					)}
 				</div>
 			)}
