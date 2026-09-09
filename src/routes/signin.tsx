@@ -280,23 +280,24 @@ export default function SignIn() {
 
 			{isNew && (
 				<div className="flex flex-col gap-3">
-					<Field
-						label="First name"
-						className="reveal"
-						name="firstName"
-						autoComplete="given-name"
-						value={firstName}
-						onChange={(event) => setFirstName(event.currentTarget.value)}
-					/>
-					<Field
-						label="Last name"
-						className="reveal"
-						style={{ animationDelay: '60ms' }}
-						name="lastName"
-						autoComplete="family-name"
-						value={lastName}
-						onChange={(event) => setLastName(event.currentTarget.value)}
-					/>
+					<div className="reveal">
+						<Field
+							label="First name"
+							name="firstName"
+							autoComplete="given-name"
+							value={firstName}
+							onChange={(event) => setFirstName(event.currentTarget.value)}
+						/>
+					</div>
+					<div className="reveal" style={{ animationDelay: '60ms' }}>
+						<Field
+							label="Last name"
+							name="lastName"
+							autoComplete="family-name"
+							value={lastName}
+							onChange={(event) => setLastName(event.currentTarget.value)}
+						/>
+					</div>
 				</div>
 			)}
 
