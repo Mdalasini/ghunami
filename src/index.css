@@ -28,7 +28,8 @@
 }
 
 html,
-body {
+body,
+#root {
 	min-height: 100%;
 	background: var(--color-paper);
 	color: var(--color-ink);
@@ -92,6 +93,88 @@ textarea {
 :focus-visible:not(input):not(textarea):not(select) {
 	outline: 3px solid var(--color-accent);
 	outline-offset: 3px;
+}
+
+@keyframes fly-in {
+	from {
+		opacity: 0;
+		transform: translateY(24px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes fly-in-sent {
+	from {
+		opacity: 0;
+		transform: translateY(16px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes fly-out {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-32px);
+	}
+}
+
+.fly-question {
+	animation: fly-in 360ms cubic-bezier(0.215, 0.61, 0.355, 1) 440ms both;
+}
+
+.fly-compose {
+	animation: fly-in 360ms cubic-bezier(0.215, 0.61, 0.355, 1) 620ms both;
+}
+
+.fly-sent {
+	animation: fly-in-sent 280ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+.sending-draft {
+	animation: fly-out 220ms cubic-bezier(0.215, 0.61, 0.355, 1) 160ms both;
+}
+
+.goal-fit {
+	container-type: inline-size;
+}
+
+.goal-amount {
+	font-size: min(3.5rem, calc((100cqi - 8px) / 4.2));
+	line-height: 1;
+}
+
+@media (min-width: 768px) {
+	.goal-amount {
+		font-size: min(4rem, calc((100cqi - 8px) / 4.2));
+	}
+}
+
+.sending-draft .compose-card {
+	background-color: var(--color-accent);
+	border-color: var(--color-accent);
+	color: var(--color-card);
+}
+
+.sending-draft .compose-card input,
+.sending-draft .compose-card textarea,
+.sending-draft .compose-card .text-accent {
+	color: var(--color-card);
+}
+
+.sending-draft [role='group'] button {
+	background-color: var(--color-accent);
+	border-color: var(--color-accent-deep);
+	color: var(--color-card);
 }
 
 @media (prefers-reduced-motion: reduce) {

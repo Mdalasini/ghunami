@@ -28,7 +28,7 @@ The shipped app is a web draft: landing page plus Goal → Photo → Story → R
 
 - Name: **ghunami** (wordmark lowercase). Titles may use Ghunami.
 - Horizon mark (rising semicircle over two receding bands) is a binding identity asset: `src/lib/assets/logo.svg`, `src/lib/assets/favicon.svg`.
-- Stack in repo: SvelteKit, Tailwind, Convex (Convex is wired; no schema or live functions yet).
+- Stack in repo: Vite, React, Tailwind. Convex is not used.
 - Shipped create flow is a local draft. No persist, no publish, no M-Pesa, no donor path.
 - Goal, cover photo (JPG/PNG/WebP, 8 MB), title (80), story (4000) exist only as client draft fields.
 - Create-flow order is shipped behavior, not a locked product rule.
