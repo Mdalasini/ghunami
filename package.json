@@ -12,7 +12,8 @@
 		"build": "react-router build",
 		"start": "react-router-serve ./build/server/index.js",
 		"preview": "vite preview",
-		"typecheck": "react-router typegen && tsc --noEmit"
+		"typecheck": "react-router typegen && tsc --noEmit",
+		"test": "node --test tests/*.test.mjs"
 	},
 	"devDependencies": {
 		"@react-router/dev": "^8.3.1",

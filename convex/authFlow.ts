@@ -133,7 +133,7 @@ export const verifyCode = action({
 	}
 });
 
-/** Google is the one hop off-site we keep, and it goes straight to Google. */
+/** The app server supplies an opaque nonce bound to its signed browser cookie. */
 export const googleUrl = action({
 	args: { redirectUri: v.string(), state: v.string() },
 	returns: v.string(),
@@ -148,7 +148,11 @@ export const googleUrl = action({
 	}
 });
 
-/** Exchanges the `?code=` WorkOS hands back after Google. */
+/**
+ * Exchanges the `?code=` WorkOS hands back after Google. This action cannot read
+ * browser cookies: the app callback must validate browser-bound OAuth state
+ * before calling it, and only that callback may install the returned session.
+ */
 export const exchangeCode = action({
 	args: { code: v.string() },
 	returns: v.object({
