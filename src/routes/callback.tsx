@@ -1,43 +1,45 @@
-import { redirect, useLoaderData, type LoaderFunctionArgs } from 'react-router';
+import { data, redirect, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { AuthShell } from '../components/AuthShell';
 import { convexServer } from '../lib/convex.server';
 import { loadServerEnv } from '../lib/env.server';
-import { safeReturnTo } from '../lib/returnTo';
+import { clearedOAuthStateCookie, validateOAuthState } from '../lib/oauthState.server';
 import { sessionCookie } from '../lib/session.server';
 
 export function meta() {
 	return [{ title: 'Signing in · Ghunami' }];
 }
 
-function returnFromState(state: string | null): string {
-	if (!state) return '/';
-	try {
-		return safeReturnTo(JSON.parse(state).returnTo);
-	} catch {
-		return '/';
-	}
-}
-
 /** Lands here after Google. Exchanges the code and seals the session. */
 export async function loader({ request }: LoaderFunctionArgs) {
 	loadServerEnv();
 	const url = new URL(request.url);
+	const headers = new Headers({ 'Cache-Control': 'no-store' });
+	const state = await validateOAuthState(request);
+	if (!state) {
+		return data({ error: 'Sign-in expired or could not be verified. Please try again.' }, {
+			status: 400,
+			headers
+		});
+	}
+
+	// A stale callback must not consume a newer login attempt's browser cookie.
+	headers.append('Set-Cookie', await clearedOAuthStateCookie());
 	const code = url.searchParams.get('code');
-
-	if (!code) {
-		return { error: url.searchParams.get('error_description') ?? 'Sign-in was cancelled.' };
+	if (url.searchParams.has('error') || !code) {
+		return data({ error: 'Sign-in was cancelled.' }, { headers });
 	}
 
-	const result = await convexServer().action(api.authFlow.exchangeCode, { code });
-
-	if (!result.session) {
-		return { error: result.error ?? 'Sign-in failed. Try again.' };
+	try {
+		const result = await convexServer().action(api.authFlow.exchangeCode, { code });
+		if (!result.session) {
+			return data({ error: result.error ?? 'Sign-in failed. Try again.' }, { headers });
+		}
+		headers.append('Set-Cookie', sessionCookie(result.session));
+		return redirect(state.returnTo, { headers });
+	} catch {
+		return data({ error: 'Sign-in failed. Try again.' }, { status: 502, headers });
 	}
-
-	return redirect(returnFromState(url.searchParams.get('state')), {
-		headers: { 'Set-Cookie': sessionCookie(result.session) }
-	});
 }
 
 export default function Callback() {
