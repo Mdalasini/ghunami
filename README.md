@@ -35,7 +35,7 @@ SESSION_SECRET=ghunami-test-only-session-key-do-not-use!
 | Layer | Command | Checks | Mocks / isolation |
 | --- | --- | --- | --- |
 | Unit | `npm test` (node project) | Draft store, `safeReturnTo`, encrypted session cookies | No `.env.local`. `process.loadEnvFile` is stubbed. Session tests use a labeled test-only key. |
-| Convex functions | `npm test` (convex project) | `users.me`, `storeUser`, `upsertFromWorkOS`, role helpers | `convex-test` in-memory database and simulated identities. **Does not** validate a deployed Convex or WorkOS integration. `authFlow.ts` is excluded so WorkOS is never constructed. |
+| Convex functions | `npm test` (convex / authFlow projects) | `users.me`, `storeUser`, `upsertFromWorkOS`, role helpers; `authFlow` send/verify/Google/refresh | `convex-test` in-memory database. **Does not** validate a deployed Convex or WorkOS integration. `authFlow` tests mock `@workos-inc/node` and use labeled test-only env vars; they never construct a network WorkOS client. |
 | Server routes | `npm test` (node project) | Sign-in, token refresh, sign-out, Google/callback | `convexServer()` and `loadServerEnv()` mocked. Real cookie sealing is used in a subset of tests. JWT payloads are local expiry fixtures, not signature proofs. |
 | Browser | `npm run test:e2e` | Signed-out home, local create-draft flow, client-side sign-in validation | Production build + `npm run start`. Does not reuse an existing server. Browser requests off the app origin (including WebSockets) are blocked. `/auth/token` returns a signed-out fixture. Node SSR is not intercepted by page routes; those journeys avoid loaders that call Convex. |
 
@@ -52,7 +52,7 @@ SESSION_SECRET=ghunami-test-only-session-key-do-not-use!
 
 1. Prefer Vitest for helpers and Convex functions (`tests/unit`, `tests/routes`, `tests/convex`).
 2. Keep Playwright specs in `tests/e2e` (`*.spec.ts` so Vitest ignores them).
-3. Never point tests at a live Convex URL or WorkOS key. Use the dummy loopback URL and mock `convexServer()` / `convex-test` identities.
+3. Never point tests at a live Convex URL or WorkOS key. Use the dummy loopback URL, mock `@workos-inc/node` / `convexServer()`, and `convex-test` identities.
 4. Tiny static files go in `tests/e2e/fixtures/`. Large binary inputs can be built in-memory in the spec.
 5. Restore env, clocks, mocks, and draft module state in `afterEach`.
 

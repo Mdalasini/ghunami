@@ -30,6 +30,16 @@ export default defineConfig({
 					name: 'convex',
 					environment: 'edge-runtime',
 					include: ['tests/convex/**/*.test.ts'],
+					exclude: ['tests/convex/authFlow.test.ts'],
+					server: { deps: { inline: ['convex-test'] } }
+				}
+			},
+			{
+				extends: true,
+				test: {
+					name: 'authFlow',
+					environment: 'node',
+					include: ['tests/convex/authFlow.test.ts'],
 					server: { deps: { inline: ['convex-test'] } }
 				}
 			}
