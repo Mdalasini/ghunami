@@ -8,6 +8,8 @@ let loaded = false;
 export function loadServerEnv(): void {
 	if (loaded) return;
 	loaded = true;
+	// Isolated tests must not inherit developer .env.local service settings.
+	if (process.env.GHUNAMI_ISOLATED_TEST === '1') return;
 	try {
 		process.loadEnvFile('.env.local');
 	} catch {
