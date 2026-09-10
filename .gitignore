@@ -25,6 +25,13 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Tests
+coverage
+test-results
+playwright-report
+blob-report
+playwright/.cache
+
 # Impeccable run artifacts (keep config, surfaces, design sidecar)
 .impeccable/review/
 .impeccable/questions/
