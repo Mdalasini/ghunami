@@ -33,11 +33,11 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 		if (!heading) return false;
 		return heading.y >= 0 && heading.y + heading.height <= page.viewportSize()!.height;
 	}).toBe(true);
-	await expect(page.getByRole('button', { name: 'Click to add ...' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Click to add' })).toBeVisible();
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Click to change ...' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Click to change' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Change', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
 	await page.keyboard.press('Enter');
