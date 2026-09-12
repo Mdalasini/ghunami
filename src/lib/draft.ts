@@ -8,7 +8,10 @@ export type CreateDraft = {
 	coverUrl: string;
 	coverName: string;
 	coverEdit?: CoverEdit;
+	/* The person chose to add a photo later. Cleared as soon as a cover is set. */
+	coverSkipped: boolean;
 	title: string;
+	/* Sanitized HTML. See `lib/richText.ts` for the allowed tags. */
 	story: string;
 };
 
@@ -16,6 +19,7 @@ const emptyDraft = (): CreateDraft => ({
 	goal: null,
 	coverUrl: '',
 	coverName: '',
+	coverSkipped: false,
 	title: '',
 	story: ''
 });
@@ -52,8 +56,15 @@ export function setCover(file: File, coverEdit?: CoverEdit) {
 		...draft,
 		coverUrl: URL.createObjectURL(file),
 		coverName: file.name,
-		coverEdit
+		coverEdit,
+		coverSkipped: false
 	};
+	emit();
+}
+
+export function clearCover() {
+	if (draft.coverUrl) URL.revokeObjectURL(draft.coverUrl);
+	draft = { ...draft, coverUrl: '', coverName: '', coverEdit: undefined };
 	emit();
 }
 

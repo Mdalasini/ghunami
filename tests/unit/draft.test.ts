@@ -21,9 +21,28 @@ describe('draft', () => {
 			goal: null,
 			coverUrl: '',
 			coverName: '',
+			coverSkipped: false,
 			title: '',
 			story: ''
 		});
+	});
+
+	it('clears a skipped flag when a cover is set and revokes it on clearCover', async () => {
+		const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:cover');
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+		const { setCover, clearCover, patchDraft, getDraft } = await loadDraft();
+		patchDraft({ coverSkipped: true });
+		expect(getDraft().coverSkipped).toBe(true);
+
+		setCover(new File(['a'], 'cover.png', { type: 'image/png' }));
+		expect(getDraft()).toMatchObject({ coverUrl: 'blob:cover', coverSkipped: false });
+
+		clearCover();
+		expect(revokeObjectURL).toHaveBeenCalledWith('blob:cover');
+		expect(getDraft()).toMatchObject({ coverUrl: '', coverName: '', coverEdit: undefined });
+		createObjectURL.mockRestore();
+		revokeObjectURL.mockRestore();
 	});
 
 	it('patches only provided fields', async () => {
