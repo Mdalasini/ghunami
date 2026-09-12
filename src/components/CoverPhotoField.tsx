@@ -1,6 +1,5 @@
 import {
 	type ChangeEvent,
-	type DragEvent,
 	type Ref,
 	useCallback,
 	useEffect,
@@ -32,6 +31,8 @@ const Cropper = lazy(() => import('react-easy-crop'));
 
 export type CoverPhotoFieldHandle = {
 	confirm: () => Promise<boolean>;
+	openPicker: () => void;
+	addFile: (file: File | undefined) => void;
 };
 
 export function CoverPhotoField({
@@ -45,7 +46,6 @@ export function CoverPhotoField({
 	onReadyChange: (ready: boolean) => void;
 	onCroppingChange?: (cropping: boolean) => void;
 }) {
-	const cropCard = useRef<HTMLDivElement>(null);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const cropViewport = useRef<HTMLDivElement>(null);
 	const [cropSize, setCropSize] = useState<{ width: number; height: number }>();
@@ -55,7 +55,6 @@ export function CoverPhotoField({
 	const cropPercentRef = useRef<Area | null>(null);
 	const confirmRef = useRef<() => Promise<boolean>>(async () => false);
 	const loadIdRef = useRef(0);
-	const [dragging, setDragging] = useState(false);
 	const [client, setClient] = useState(false);
 	const [pending, setPending] = useState<DecodedCover | null>(null);
 	const [fileName, setFileName] = useState('');
@@ -158,9 +157,6 @@ export function CoverPhotoField({
 			setInitialCrop(savedCrop);
 			setFileName(file.name);
 			setWarning('');
-			requestAnimationFrame(() => {
-				cropCard.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
-			});
 		} catch (caught) {
 			if (loadId !== loadIdRef.current) return;
 			replacePending(null);
@@ -176,12 +172,6 @@ export function CoverPhotoField({
 	function onFileChange(event: ChangeEvent<HTMLInputElement>) {
 		void acceptFile(event.currentTarget.files?.[0]);
 		event.currentTarget.value = '';
-	}
-
-	function onDrop(event: DragEvent<HTMLDivElement>) {
-		event.preventDefault();
-		setDragging(false);
-		void acceptFile(event.dataTransfer.files[0]);
 	}
 
 	function onCropComplete(croppedArea: Area) {
@@ -241,13 +231,14 @@ export function CoverPhotoField({
 
 	confirmRef.current = confirm;
 	useImperativeHandle(ref, () => ({
-		confirm: () => confirmRef.current()
+		confirm: () => confirmRef.current(),
+		openPicker: () => fileInput.current?.click(),
+		addFile: (file) => void acceptFile(file)
 	}));
 
 	const showCropper = Boolean(pending);
-	const helper = showCropper
-		? 'Drag to reposition · zoom is limited to preserve photo quality'
-		: 'or drop one here · JPG, PNG, HEIC, WebP · up to 25 MB';
+	const helper = 'Drag to reposition · zoom is limited to preserve photo quality';
+	const hasAttachment = showCropper || coverUrl !== '';
 
 	return (
 		<>
@@ -259,21 +250,14 @@ export function CoverPhotoField({
 				onChange={onFileChange}
 			/>
 			<div
-				ref={cropCard}
-				className={`compose-card ml-15 overflow-hidden rounded-3xl rounded-tr-lg border-2 bg-card transition-colors duration-150 ${
-					dragging ? 'border-accent' : 'border-line'
+				className={`attachment-tray overflow-hidden rounded-3xl border-2 border-line bg-card ${
+					hasAttachment || reading ? '' : 'hidden'
 				}`}
 				style={showCropper ? {
-					width: 'min(100%, 28rem, max(12rem, calc(80dvh - 240px)))',
+					width: 'min(100%, 28rem, max(11rem, calc(70dvh - 220px)))',
 					marginInline: 'auto'
 				} : undefined}
 				role="presentation"
-				onDragOver={(event) => {
-					event.preventDefault();
-					setDragging(true);
-				}}
-				onDragLeave={() => setDragging(false)}
-				onDrop={onDrop}
 			>
 				{showCropper && pending ? (
 					<div className="relative">
@@ -390,36 +374,17 @@ export function CoverPhotoField({
 						</button>
 					</div>
 				) : (
-					<button
-						type="button"
-						className="flex h-72 w-full flex-col items-center justify-center gap-3 px-6 text-center"
-						onClick={() => fileInput.current?.click()}
-					>
-						<span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-sun text-accent">
-							<svg
-								viewBox="0 0 24 24"
-								className="h-7 w-7"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2.2"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								aria-hidden="true"
-							>
-								<path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3M12 4v11M7.5 8.5 12 4l4.5 4.5" />
-							</svg>
-						</span>
-						<span className="text-xl font-extrabold">{reading ? 'Reading photo' : 'Choose a photo'}</span>
-						<span className="text-sm text-mute">{helper}</span>
-					</button>
+					<p className="px-5 py-4 text-sm font-extrabold tracking-wider text-mute uppercase">
+						Reading photo
+					</p>
 				)}
 			</div>
 			{error ? (
-				<p className="ml-15 text-sm font-medium text-error" role="alert">
+				<p className="px-2 text-sm font-medium text-error" role="alert">
 					{error}
 				</p>
 			) : warning ? (
-				<p className="ml-15 text-sm font-medium text-mute" role="status" aria-live="polite">
+				<p className="px-2 text-sm font-medium text-mute" role="status" aria-live="polite">
 					{warning}
 				</p>
 			) : null}

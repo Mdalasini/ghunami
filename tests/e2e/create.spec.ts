@@ -25,14 +25,14 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await expect(page.getByRole('heading', { name: 'How much do you want to raise?' })).toBeVisible();
 
 	await page.getByRole('button', { name: /100,000/ }).click();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Add a cover photo' })).toBeVisible();
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 	const sentCover = page.getByRole('img', { name: 'Your cover' });
@@ -50,11 +50,11 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	expect(encoded.size).toBeGreaterThan(0);
 	expect(encoded.size).toBeLessThanOrEqual(1024 * 1024);
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Tell people what happened' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	const review = page.getByRole('region', { name: 'Your draft' });
@@ -66,9 +66,9 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await review.getByRole('button', { name: 'Edit' }).first().click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya fly home');
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'Tell people what happened' })).toBeVisible();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	await expect(page.getByRole('region', { name: 'Your draft' }).getByText('Help Maya fly home')).toBeVisible();
@@ -76,10 +76,10 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 
 test('rejects an empty goal and an unsupported or oversized cover', async ({ page }) => {
 	await page.goto('/create');
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
 
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await page.locator('input[type="file"]').setInputFiles({
 		name: 'notes.txt',
@@ -99,26 +99,26 @@ test('rejects an empty goal and an unsupported or oversized cover', async ({ pag
 test('blocks a cover crop below 540×675 and warns when the crop is a little soft', async ({ page }) => {
 	await page.goto('/create');
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await page.locator('input[type="file"]').setInputFiles(tinyCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveText(/too small/i);
 		await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeDisabled();
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
 
 	await page.locator('input[type="file"]').setInputFiles(softCover);
 	await expect(page.getByRole('status')).toHaveText(/a little soft/i);
 		await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeDisabled();
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 });
 
 test('shows only the saved frame and clamps zoom before quality degrades', async ({ page }) => {
 	await page.goto('/create');
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	const slider = page.getByRole('slider', { name: 'Zoom photo' });
 	await expect(slider).toBeEnabled();
@@ -136,7 +136,7 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	expect(bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 300);
 	await expect.poll(async () => {
 		const controls = await slider.boundingBox();
-		const continueButton = await page.getByRole('button', { name: 'Continue' }).boundingBox();
+		const continueButton = await page.getByRole('button', { name: 'Send' }).boundingBox();
 		return controls!.y + controls!.height < continueButton!.y;
 	}).toBe(true);
 	expect(Math.abs(bounds!.width - cropBounds!.width)).toBeLessThanOrEqual(1);
@@ -146,16 +146,16 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	await expect(slider).toHaveValue(maximum!);
 	await expect(page.getByRole('alert')).toHaveCount(0);
 	await expect(page.getByRole('status')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
 	await expect(slider).toBeVisible();
 	await expect(slider).toHaveValue(maximum!);
 	await expect(slider).toHaveAttribute('max', maximum!);
 	await expect(viewport).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 });
 
@@ -194,7 +194,7 @@ function closerTo(
 test('encodes the user-selected crop region, not just any 4:5 slice', async ({ page }) => {
 	await page.goto('/create');
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	await page.locator('input[type="file"]').setInputFiles({
 		name: 'banded.png',
@@ -211,8 +211,8 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	await page.mouse.move(box.x + box.width / 2, box.y + 24, { steps: 10 });
 	await page.mouse.up();
 
-	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Send' }).click();
 
 	const sentCover = page.getByRole('img', { name: 'Your cover' });
 	await expect(sentCover).toBeVisible();
