@@ -209,12 +209,13 @@ test('blocks a cover crop below 540×675 and warns when the crop is a little sof
 	await page.locator('input[type="file"]').setInputFiles(tinyCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveText(/too small/i);
-		await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeDisabled();
+	// Zooming could only make a weak photo worse, so there is nothing to zoom.
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
 
 	await page.locator('input[type="file"]').setInputFiles(softCover);
 	await expect(page.getByRole('status')).toHaveText(/a little soft/i);
-		await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeDisabled();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
@@ -227,10 +228,14 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	const slider = page.getByRole('slider', { name: 'Zoom photo' });
 	await expect(slider).toBeEnabled();
+	// The slider spans the whole allowed range: its end is the last sharp zoom, never a warning.
+	await expect(slider).toHaveAttribute('max', '100');
+	await expect(slider).toHaveValue('0');
 	await slider.focus();
 	await slider.press('End');
-	const maximum = await slider.getAttribute('max');
-	await expect(slider).toHaveValue(maximum!);
+	await expect(slider).toHaveValue('100');
+	const maxZoom = await slider.getAttribute('aria-valuetext');
+	expect(Number.parseFloat(maxZoom!)).toBeGreaterThan(1);
 	const viewport = page.locator('.cover-crop-container');
 	const frame = page.locator('.cover-crop-area');
 	const bounds = await viewport.boundingBox();
@@ -248,7 +253,8 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	expect(Math.abs(bounds!.height - cropBounds!.height)).toBeLessThanOrEqual(1);
 	await viewport.hover();
 	await page.mouse.wheel(0, -2000);
-	await expect(slider).toHaveValue(maximum!);
+	await expect(slider).toHaveValue('100');
+	await expect(slider).toHaveAttribute('aria-valuetext', maxZoom!);
 	await expect(page.getByRole('alert')).toHaveCount(0);
 	await expect(page.getByRole('status')).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
@@ -256,8 +262,8 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
 	await expect(slider).toBeVisible();
-	await expect(slider).toHaveValue(maximum!);
-	await expect(slider).toHaveAttribute('max', maximum!);
+	await expect(slider).toHaveValue('100');
+	await expect(slider).toHaveAttribute('aria-valuetext', maxZoom!);
 	await expect(viewport).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Send' }).click();
@@ -309,6 +315,8 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 
 	const cropper = page.locator('.cover-crop-container');
+	// Hovering waits for the tray to finish rising before we measure where to drag.
+	await cropper.hover();
 	const box = await cropper.boundingBox();
 	if (!box) throw new Error('Cover cropper was not positioned');
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -328,4 +336,47 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	if (!top || !bottom) throw new Error('Missing cover samples');
 	expect(closerTo(top, BLUE, RED)).toBe('a');
 	expect(closerTo(bottom, BLUE, RED)).toBe('a');
+});
+
+test('the photo tray rises over the thread and lowers again without moving it', async ({ page }) => {
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
+	const heading = page.getByRole('heading', { name: 'Add a cover photo' });
+	const tip = page.getByText('Choosing a photo');
+	await expect(heading).toBeVisible();
+	await expect(tip).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
+	const before = await heading.boundingBox();
+	const tipBefore = await tip.boundingBox();
+
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	const tray = page.locator('.cover-tray');
+	await expect(tray).toHaveClass(/is-raised/);
+	const cropper = page.locator('.cover-crop-container');
+	await cropper.hover();
+	// The tray overlays the thread: nothing behind it was reflowed or hidden.
+	expect(await heading.boundingBox()).toEqual(before);
+	expect(await tip.boundingBox()).toEqual(tipBefore);
+	await expect(tip).toHaveCount(1);
+	const trayBox = await tray.boundingBox();
+	const footer = await page.getByRole('contentinfo').boundingBox();
+	expect(trayBox!.y + trayBox!.height).toBeLessThanOrEqual(footer!.y + 1);
+	expect(trayBox!.y).toBeGreaterThanOrEqual(0);
+
+	await page.getByRole('button', { name: 'Remove photo' }).click();
+	await expect(tray).not.toHaveClass(/is-raised/);
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeHidden();
+	expect(await heading.boundingBox()).toEqual(before);
+	expect(await tip.boundingBox()).toEqual(tipBefore);
+
+	// Sending lowers the tray too; the thread keeps the tip, and the cover lands as the next message.
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	await expect(tray).toHaveClass(/is-raised/);
+	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(tray).not.toHaveClass(/is-raised/);
+	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	await expect(tip).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await expect(page.locator('.reactEasyCrop_Container')).toHaveCount(0);
 });

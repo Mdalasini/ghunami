@@ -225,7 +225,9 @@ export default function Create() {
 		(active === 4 && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX) ||
 		active === LAST;
 
-	const busy = typing || sending || coverBusy;
+	/* From your message landing until the reply has arrived; the composer waits it out. */
+	const replying = typing || sending;
+	const busy = replying || coverBusy;
 
 	/*
 	 * Keep the bottom of the thread glued to the viewport while heights animate. A single
@@ -259,7 +261,7 @@ export default function Create() {
 	}, []);
 
 	useEffect(() => {
-		if (typing || done) return;
+		if (replying || done) return;
 		if (active === 2) {
 			if (coverReady) sendRef.current?.focus({ preventScroll: true });
 			return;
@@ -269,7 +271,7 @@ export default function Create() {
 			return;
 		}
 		fieldRef.current?.focus({ preventScroll: true });
-	}, [active, typing, done, coverReady]);
+	}, [active, replying, done, coverReady]);
 
 	const onStoryFormats = useCallback((formats: StoryFormats) => setStoryFormats(formats), []);
 
@@ -536,8 +538,8 @@ export default function Create() {
 	}
 
 	/* Every step up to the current one stays in the thread; the current step is shown once the typing bubble clears. */
-	const visibleSteps = STEPS.slice(0, typing && !done ? step - 1 : step);
-	const showSkip = active === 2 && !coverReady && !coverCropping && !typing;
+	const visibleSteps = STEPS.slice(0, replying && !done ? step - 1 : step);
+	const showSkip = active === 2 && !coverReady && !coverCropping && !replying;
 
 	return (
 		<div className="flex min-h-dvh flex-col">
@@ -618,7 +620,7 @@ export default function Create() {
 						<Sent n={LAST}>
 							<span className="text-lg font-bold">Looks good</span>
 						</Sent>
-						{!typing && (
+						{!replying && (
 							<div className="grow-in">
 								<Received>
 									<div className="bubble-in min-w-0 rounded-3xl bg-card px-5 py-4">
@@ -699,7 +701,7 @@ export default function Create() {
 					) : (
 						<form
 							key={`${active}-${editing !== null ? 'edit' : 'new'}`}
-							className={`flex flex-col gap-3 ${typing ? 'opacity-60' : 'fly-compose'}`}
+							className={`flex flex-col gap-3 ${replying ? 'opacity-60' : 'fly-compose'}`}
 							onSubmit={(event) => {
 								event.preventDefault();
 								void goNext();
@@ -789,7 +791,7 @@ export default function Create() {
 											value={goalText}
 											onChange={onGoalInput}
 											onKeyDown={onGoalKeydown}
-											disabled={typing}
+											disabled={replying}
 										/>
 									</label>
 								) : active === 2 ? (
@@ -812,7 +814,7 @@ export default function Create() {
 											value={draft.title}
 											onChange={(event) => patchDraft({ title: event.currentTarget.value })}
 											onKeyDown={onTitleKeydown}
-											disabled={typing}
+											disabled={replying}
 										/>
 									</label>
 								) : (
@@ -823,7 +825,7 @@ export default function Create() {
 											onChange={(story) => patchDraft({ story })}
 											onFormatsChange={onStoryFormats}
 											onKeyDown={onEnter}
-											disabled={typing}
+											disabled={replying}
 											placeholder="Hi, I’m Jane. I’m raising money for…"
 										/>
 									</div>
@@ -832,7 +834,7 @@ export default function Create() {
 								<SendButton buttonRef={sendRef} disabled={!canContinue || busy} />
 							</div>
 
-							<div className="flex min-h-4 items-center justify-between gap-3 px-2 text-xs font-medium text-hint">
+							<div className="flex min-h-6 items-center justify-between gap-3 px-2 text-xs font-medium text-hint">
 								<span className="hidden sm:inline">
 									{active === 2
 										? 'JPG, PNG, HEIC, WebP · up to 25 MB · or drop one here'

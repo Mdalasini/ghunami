@@ -98,7 +98,8 @@ describe('crop resolution', () => {
 	});
 
 	it('keeps the crop sharp at the limit even after rounding shaves a pixel off each edge', () => {
-		for (const [width, height] of [[1000, 1250], [1080, 1350], [3024, 4032], [4032, 3024], [1200, 1200]]) {
+		const originals: Array<[number, number]> = [[1000, 1250], [1080, 1350], [3024, 4032], [4032, 3024], [1200, 1200]];
+		for (const [width, height] of originals) {
 			const zoom = maxCoverZoom(width, height);
 			const cropWidth = Math.min(width, height * COVER_ASPECT) / zoom;
 			const cropHeight = cropWidth / COVER_ASPECT;

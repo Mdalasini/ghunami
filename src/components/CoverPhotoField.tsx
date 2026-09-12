@@ -197,9 +197,19 @@ export function CoverPhotoField({
 		}, TRAY_CLOSE_MS);
 	}
 
+	/* A new photo interrupts a lowering tray: finish the queued cleanup now so it cannot swallow the new photo. */
+	function settleClose() {
+		window.clearTimeout(closeTimer.current);
+		const queued = onClosedRef.current;
+		onClosedRef.current = null;
+		queued?.();
+		setClosing(false);
+	}
+
 	async function acceptFile(file: File | undefined, savedCrop?: Area) {
 		if (!file) return;
 
+		settleClose();
 		const loadId = loadIdRef.current + 1;
 		loadIdRef.current = loadId;
 		setError('');
