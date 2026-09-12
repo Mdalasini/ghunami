@@ -273,13 +273,16 @@ export default function Create() {
 							</Sent>
 						)}
 						{shownThrough >= 2 && draft.coverUrl && (
-							<Sent n={2} onEdit={(n) => void goTo(n)}>
-								<CoverImage
-									src={draft.coverUrl}
-									alt="Your cover"
-									className="w-16 rounded-2xl"
-								/>
-							</Sent>
+							<div className="fly-sent flex justify-end">
+								<button
+									type="button"
+									className="block w-56 max-w-[75%] overflow-hidden rounded-3xl rounded-br-lg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent md:w-64"
+									onClick={() => void goTo(2)}
+									aria-label="Change your answer to step 2"
+								>
+									<CoverImage src={draft.coverUrl} alt="Your cover" className="w-full" />
+								</button>
+							</div>
 						)}
 						{shownThrough >= 3 && draft.title.trim() && (
 							<Sent n={3} onEdit={(n) => void goTo(n)}>
