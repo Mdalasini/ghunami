@@ -252,3 +252,11 @@ textarea {
 	background: var(--color-accent);
 	animation: check-pip 1.3s ease-in-out infinite;
 }
+
+.cover-crop-container {
+	touch-action: none;
+}
+
+.cover-crop-area {
+	border-radius: 16px;
+}

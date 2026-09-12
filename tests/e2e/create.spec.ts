@@ -1,7 +1,23 @@
-import path from 'node:path';
 import { expect, test } from './fixtures';
+import { solidPng } from './png';
 
-const cover = path.join(import.meta.dirname, 'fixtures', 'cover.png');
+const sharpCover = {
+	name: 'cover.png',
+	mimeType: 'image/png',
+	buffer: solidPng(800, 1000)
+};
+
+const softCover = {
+	name: 'soft.png',
+	mimeType: 'image/png',
+	buffer: solidPng(600, 750)
+};
+
+const tinyCover = {
+	name: 'tiny.png',
+	mimeType: 'image/png',
+	buffer: solidPng(200, 250)
+};
 
 test('completes the local draft and can edit a previous answer', async ({ page }) => {
 	await page.goto('/create');
@@ -11,11 +27,14 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await page.getByRole('button', { name: 'Continue' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Add a cover photo' })).toBeVisible();
-	await page.locator('input[type="file"]').setInputFiles(cover);
-	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Continue' }).click();
 
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
 	await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -28,6 +47,7 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await expect(review.getByText('Help Maya get home')).toBeVisible();
 	await expect(review.getByText('Raising travel money so Maya can get home safely.')).toBeVisible();
 	await expect(review.getByText(/100,000/)).toBeVisible();
+	await expect(review.getByRole('img', { name: 'Your cover' })).toBeVisible();
 
 	await review.getByRole('button', { name: 'Edit' }).first().click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
@@ -57,7 +77,24 @@ test('rejects an empty goal and an unsupported or oversized cover', async ({ pag
 	await page.locator('input[type="file"]').setInputFiles({
 		name: 'huge.png',
 		mimeType: 'image/png',
-		buffer: Buffer.alloc(8 * 1024 * 1024 + 1)
+		buffer: Buffer.alloc(25 * 1024 * 1024 + 1)
 	});
-	await expect(page.getByRole('alert')).toHaveText(/over 8 MB/i);
+	await expect(page.getByRole('alert')).toHaveText(/over 25 MB/i);
+});
+
+test('blocks a cover crop below 540×675 and warns when the crop is a little soft', async ({ page }) => {
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Continue' }).click();
+
+	await page.locator('input[type="file"]').setInputFiles(tinyCover);
+	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
+	await expect(page.getByRole('alert')).toHaveText(/too small/i);
+	await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+
+	await page.locator('input[type="file"]').setInputFiles(softCover);
+	await expect(page.getByRole('status')).toHaveText(/a little soft/i);
+	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 });

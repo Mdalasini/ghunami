@@ -1,6 +1,5 @@
 import {
 	type ChangeEvent,
-	type DragEvent,
 	type KeyboardEvent,
 	type ReactNode,
 	useRef,
@@ -8,15 +7,10 @@ import {
 	useSyncExternalStore
 } from 'react';
 import { Link } from 'react-router';
+import { CoverImage } from '../components/CoverImage';
+import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import { HorizonMark, Tip } from '../components/Tip';
-import {
-	formatGoal,
-	getDraft,
-	patchDraft,
-	resetDraft,
-	setCover,
-	subscribeDraft
-} from '../lib/draft';
+import { formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
 
 const STEPS = [
 	{ q: 'How much do you want to raise?', sub: 'Pick a starting number. You can change it later.' },
@@ -28,7 +22,6 @@ const STEPS = [
 
 const LAST = STEPS.length;
 const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -106,9 +99,9 @@ export default function Create() {
 	const [goalText, setGoalText] = useState(() =>
 		draft.goal !== null ? draft.goal.toLocaleString('en-KE') : ''
 	);
-	const [dragging, setDragging] = useState(false);
-	const [coverError, setCoverError] = useState('');
-	const fileInput = useRef<HTMLInputElement>(null);
+	const [coverReady, setCoverReady] = useState(() => getDraft().coverUrl !== '');
+	const [coverBusy, setCoverBusy] = useState(false);
+	const coverField = useRef<CoverPhotoFieldHandle>(null);
 
 	const currentStep = STEPS[step - 1];
 	if (!currentStep) {
@@ -117,7 +110,7 @@ export default function Create() {
 
 	const canContinue =
 		(step === 1 && draft.goal !== null && draft.goal > 0) ||
-		(step === 2 && draft.coverUrl !== '') ||
+		(step === 2 && coverReady) ||
 		(step === 3 && draft.title.trim().length > 0) ||
 		(step === 4 && draft.story.trim().length > 0) ||
 		step === LAST;
@@ -142,31 +135,6 @@ export default function Create() {
 		setGoalText(amount.toLocaleString('en-KE'));
 	}
 
-	function acceptFile(file: File | undefined) {
-		setCoverError('');
-		if (!file) return;
-		if (!file.type.startsWith('image/')) {
-			setCoverError('That isn’t an image. Use a JPG, PNG, or WebP.');
-			return;
-		}
-		if (file.size > MAX_IMAGE_BYTES) {
-			setCoverError('That photo is over 8 MB. Pick a smaller one.');
-			return;
-		}
-		setCover(file);
-	}
-
-	function onFileChange(event: ChangeEvent<HTMLInputElement>) {
-		acceptFile(event.currentTarget.files?.[0]);
-		event.currentTarget.value = '';
-	}
-
-	function onDrop(event: DragEvent<HTMLDivElement>) {
-		event.preventDefault();
-		setDragging(false);
-		acceptFile(event.dataTransfer.files[0]);
-	}
-
 	async function goTo(n: number) {
 		setDone(false);
 		setSending(false);
@@ -178,7 +146,13 @@ export default function Create() {
 	}
 
 	async function goNext() {
-		if (!canContinue) return;
+		if (!canContinue || sending || coverBusy) return;
+		if (step === 2 && coverField.current) {
+			setCoverBusy(true);
+			const confirmed = await coverField.current.confirm();
+			setCoverBusy(false);
+			if (!confirmed) return;
+		}
 		if (step >= LAST) {
 			setDone(true);
 			return;
@@ -206,7 +180,8 @@ export default function Create() {
 	function startOver() {
 		resetDraft();
 		setGoalText('');
-		setCoverError('');
+		setCoverReady(false);
+		setCoverBusy(false);
 		setDone(false);
 		setSending(false);
 		setShownThrough(0);
@@ -297,7 +272,11 @@ export default function Create() {
 						)}
 						{shownThrough >= 2 && draft.coverUrl && (
 							<Sent n={2} onEdit={(n) => void goTo(n)}>
-								<img src={draft.coverUrl} alt="Your cover" className="h-20 w-28 rounded-2xl object-cover" />
+								<CoverImage
+									src={draft.coverUrl}
+									alt="Your cover"
+									className="w-16 rounded-2xl"
+								/>
 							</Sent>
 						)}
 						{shownThrough >= 3 && draft.title.trim() && (
@@ -325,7 +304,7 @@ export default function Create() {
 					</div>
 					{!done && step === 2 && (
 						<Tip title="Choosing a photo">
-							<p>Use a clear, bright landscape photo. If possible, pick one from a happier time.</p>
+							<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
 						</Tip>
 					)}
 					{!done && step === 3 && (
@@ -366,11 +345,11 @@ export default function Create() {
 								<div className="py-4">
 									<p className="text-sm font-medium text-mute">Cover photo</p>
 									{draft.coverUrl ? (
-										<div className="relative mt-1">
-											<img
+										<div className="relative mt-1 w-48 max-w-full">
+											<CoverImage
 												src={draft.coverUrl}
 												alt="Your cover"
-												className="h-56 w-full rounded-2xl object-cover"
+												className="rounded-2xl"
 											/>
 											{photoEdit(2)}
 										</div>
@@ -427,68 +406,11 @@ export default function Create() {
 							</div>
 						</>
 					) : step === 2 ? (
-						<>
-							<input
-								ref={fileInput}
-								className="sr-only"
-								type="file"
-								accept="image/jpeg,image/png,image/webp"
-								onChange={onFileChange}
-							/>
-							<div
-								className={`compose-card ml-15 overflow-hidden rounded-3xl rounded-tr-lg border-2 bg-card transition-colors duration-150 ${
-									dragging ? 'border-accent' : 'border-line'
-								}`}
-								role="presentation"
-								onDragOver={(event) => {
-									event.preventDefault();
-									setDragging(true);
-								}}
-								onDragLeave={() => setDragging(false)}
-								onDrop={onDrop}
-							>
-								{draft.coverUrl ? (
-									<div className="relative">
-										<img src={draft.coverUrl} alt="Your cover" className="h-72 w-full object-cover" />
-										<button
-											type="button"
-											className="absolute top-3 right-3 rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
-											onClick={() => fileInput.current?.click()}
-										>
-											Change
-										</button>
-									</div>
-								) : (
-									<button
-										type="button"
-										className="flex h-72 w-full flex-col items-center justify-center gap-3 px-6 text-center"
-										onClick={() => fileInput.current?.click()}
-									>
-										<span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-sun text-accent">
-											<svg
-												viewBox="0 0 24 24"
-												className="h-7 w-7"
-												fill="none"
-												stroke="currentColor"
-												strokeWidth="2.2"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												aria-hidden="true"
-											>
-												<path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3M12 4v11M7.5 8.5 12 4l4.5 4.5" />
-											</svg>
-										</span>
-										<span className="text-xl font-extrabold">Choose a photo</span>
-										<span className="text-sm text-mute">or drop one here · JPG, PNG, WebP · up to 8 MB</span>
-									</button>
-								)}
-							</div>
-							{coverError && (
-								<p className="ml-15 text-sm font-medium text-error" role="alert">
-									{coverError}
-								</p>
-							)}
-						</>
+						<CoverPhotoField
+							ref={coverField}
+							coverUrl={draft.coverUrl}
+							onReadyChange={setCoverReady}
+						/>
 					) : step === 3 ? (
 						<label className="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent">
 							<span className="sr-only">Title</span>
@@ -563,9 +485,11 @@ export default function Create() {
 							<button
 								type="button"
 								className={`btn-press min-w-40 ${
-									canContinue ? 'bg-accent text-card hover:bg-accent-deep' : 'bg-line text-mute'
+									canContinue && !coverBusy
+										? 'bg-accent text-card hover:bg-accent-deep'
+										: 'bg-line text-mute'
 								}`}
-								disabled={!canContinue}
+								disabled={!canContinue || coverBusy}
 								onClick={() => void goNext()}
 							>
 								{step === LAST ? 'Looks good' : 'Continue'}
