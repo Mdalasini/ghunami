@@ -97,9 +97,12 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(goalAnswer).toHaveText(/100,000/);
 
-	// Switching to another answer discards the unsent change too.
+	// Clearing the field mid-edit keeps the sent bubble showing the answer that was sent.
 	await goalAnswer.click();
 	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('');
+	await expect(goalAnswer).toHaveText(/100,000/);
+	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+	// Switching to another answer discards the unsent change too.
 	await titleAnswer.click();
 	await expect(page.getByRole('contentinfo').getByText('Editing the title')).toBeVisible();
 	await expect(goalAnswer).toHaveText(/100,000/);
@@ -136,13 +139,14 @@ test('can skip the cover, remove a chosen photo, and return to it later', async 
 	await expect(cover).toBeVisible();
 	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
 
-	// Removing the cover during an edit and cancelling brings the original back, still loadable.
+	// Removing the cover during an edit leaves the sent bubble in place; cancelling keeps the original loadable.
 	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 	await page.getByRole('button', { name: 'Remove photo' }).click();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
-	await expect(cover).toHaveCount(0);
+	await expect(cover).toBeVisible();
 	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0);
 	await expect(cover).toBeVisible();
 	await expect
 		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
@@ -338,6 +342,32 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	expect(closerTo(bottom, BLUE, RED)).toBe('a');
 });
 
+test('opening an edit does not scroll the thread to the bottom', async ({ page }) => {
+	await page.setViewportSize({ width: 420, height: 560 });
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('button', { name: 'Skip for now' }).click();
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
+	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
+	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+
+	const goalAnswer = page.getByRole('button', { name: 'Change your answer to step 1' });
+	await goalAnswer.scrollIntoViewIfNeeded();
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY))
+		.toBeGreaterThan(200);
+	const before = await page.evaluate(() => window.scrollY);
+	await goalAnswer.click();
+	await expect(page.getByRole('contentinfo').getByText('Editing your goal')).toBeVisible();
+	await page.waitForTimeout(600);
+	const after = await page.evaluate(() => window.scrollY);
+	expect(Math.abs(after - before)).toBeLessThan(120);
+	await expect(goalAnswer).toBeInViewport();
+});
+
 test('the photo tray rises over the thread and lowers again without moving it', async ({ page }) => {
 	await page.goto('/create');
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
@@ -347,6 +377,12 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	await expect(heading).toBeVisible();
 	await expect(tip).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
+	// The composer's suggestion row folds away after the goal is sent; let the layout settle first.
+	await expect.poll(async () => {
+		const first = await heading.boundingBox();
+		await page.waitForTimeout(100);
+		return JSON.stringify(first) === JSON.stringify(await heading.boundingBox());
+	}).toBe(true);
 	const before = await heading.boundingBox();
 	const tipBefore = await tip.boundingBox();
 
@@ -374,6 +410,8 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(tray).toHaveClass(/is-raised/);
 	await page.getByRole('button', { name: 'Send' }).click();
+	// Sent photos shrink away rather than lowering, so the bubble is not seen behind a moving tray.
+	await expect(tray).toHaveClass(/is-sent/);
 	await expect(tray).not.toHaveClass(/is-raised/);
 	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
 	await expect(tip).toBeVisible();
