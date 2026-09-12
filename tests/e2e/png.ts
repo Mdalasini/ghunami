@@ -21,10 +21,10 @@ function chunk(type: string, data: Buffer): Buffer {
 	return Buffer.concat([length, typeAndData, checksum]);
 }
 
-export function solidPng(
+export function pngFromPixels(
 	width: number,
 	height: number,
-	rgb: readonly [number, number, number] = [21, 128, 61]
+	colorAt: (x: number, y: number) => readonly [number, number, number]
 ): Buffer {
 	const ihdr = Buffer.alloc(13);
 	ihdr.writeUInt32BE(width, 0);
@@ -39,6 +39,7 @@ export function solidPng(
 		raw[row] = 0;
 		for (let x = 0; x < width; x += 1) {
 			const pixel = row + 1 + x * 3;
+			const rgb = colorAt(x, y);
 			raw[pixel] = rgb[0];
 			raw[pixel + 1] = rgb[1];
 			raw[pixel + 2] = rgb[2];
@@ -52,4 +53,22 @@ export function solidPng(
 		chunk('IDAT', deflateSync(raw)),
 		chunk('IEND', Buffer.alloc(0))
 	]);
+}
+
+export function solidPng(
+	width: number,
+	height: number,
+	rgb: readonly [number, number, number] = [21, 128, 61]
+): Buffer {
+	return pngFromPixels(width, height, () => rgb);
+}
+
+export function bandedPng(
+	width: number,
+	height: number,
+	top: readonly [number, number, number],
+	bottom: readonly [number, number, number]
+): Buffer {
+	const split = Math.floor(height / 2);
+	return pngFromPixels(width, height, (_x, y) => (y < split ? top : bottom));
 }

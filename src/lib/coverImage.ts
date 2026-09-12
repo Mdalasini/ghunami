@@ -177,6 +177,31 @@ async function createOrientedBitmap(blob: Blob): Promise<ImageBitmap> {
 	}
 }
 
+export type CoverBitmapSource = {
+	createBitmap: (blob: Blob) => Promise<ImageBitmap>;
+	convertHeic: (file: File) => Promise<ImageBitmap>;
+	detectHeic: (file: File) => Promise<boolean>;
+};
+
+export async function bitmapFromCoverFile(
+	file: File,
+	source: CoverBitmapSource
+): Promise<ImageBitmap> {
+	try {
+		return await source.createBitmap(file);
+	} catch {
+		const tryHeic = looksLikeHeic(file) || (await source.detectHeic(file));
+		if (!tryHeic) {
+			throw new Error(COVER_MESSAGES.unreadable);
+		}
+		try {
+			return await source.convertHeic(file);
+		} catch {
+			throw new Error(COVER_MESSAGES.unreadable);
+		}
+	}
+}
+
 async function heicToBitmap(file: File): Promise<ImageBitmap> {
 	const { heicTo } = await import('heic-to');
 	try {
@@ -191,8 +216,7 @@ async function heicToBitmap(file: File): Promise<ImageBitmap> {
 	}
 }
 
-async function shouldTryHeic(file: File): Promise<boolean> {
-	if (looksLikeHeic(file)) return true;
+async function detectHeicMagic(file: File): Promise<boolean> {
 	try {
 		const { isHeic } = await import('heic-to');
 		return await isHeic(file);
@@ -201,19 +225,16 @@ async function shouldTryHeic(file: File): Promise<boolean> {
 	}
 }
 
+function defaultCoverBitmapSource(): CoverBitmapSource {
+	return {
+		createBitmap: createOrientedBitmap,
+		convertHeic: heicToBitmap,
+		detectHeic: detectHeicMagic
+	};
+}
+
 async function fileToBitmap(file: File): Promise<ImageBitmap> {
-	try {
-		return await createOrientedBitmap(file);
-	} catch {
-		if (await shouldTryHeic(file)) {
-			try {
-				return await heicToBitmap(file);
-			} catch {
-				throw new Error(COVER_MESSAGES.unreadable);
-			}
-		}
-		throw new Error(COVER_MESSAGES.unreadable);
-	}
+	return await bitmapFromCoverFile(file, defaultCoverBitmapSource());
 }
 
 function require2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {

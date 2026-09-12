@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	assessCropResolution,
+	bitmapFromCoverFile,
 	clampPixelCrop,
 	COVER_MESSAGES,
 	COVER_QUALITY_FLOOR,
@@ -139,5 +140,62 @@ describe('cover encoding helpers', () => {
 		expect(coverFileName('Holiday.HEIC', 'image/jpeg')).toBe('Holiday.jpg');
 		expect(coverFileName('Holiday.HEIC', 'image/webp')).toBe('Holiday.webp');
 		expect(coverFileName('cover', 'image/jpeg')).toBe('cover.jpg');
+	});
+});
+
+describe('HEIC decode fallback', () => {
+	const bitmap = { width: 8, height: 10 } as ImageBitmap;
+
+	it('converts HEIC when native decode fails', async () => {
+		const convertHeic = vi.fn().mockResolvedValue(bitmap);
+		const result = await bitmapFromCoverFile(file('IMG_0001.HEIC', 'image/heic'), {
+			createBitmap: async () => {
+				throw new Error('browser cannot decode HEIC');
+			},
+			convertHeic,
+			detectHeic: async () => false
+		});
+		expect(convertHeic).toHaveBeenCalledTimes(1);
+		expect(result).toBe(bitmap);
+	});
+
+	it('uses magic-byte detection when type and extension are missing', async () => {
+		const convertHeic = vi.fn().mockResolvedValue(bitmap);
+		await bitmapFromCoverFile(file('IMG_0001', ''), {
+			createBitmap: async () => {
+				throw new Error('not a jpeg');
+			},
+			convertHeic,
+			detectHeic: async () => true
+		});
+		expect(convertHeic).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not convert a failed JPEG unless it is detected as HEIC', async () => {
+		const convertHeic = vi.fn();
+		await expect(
+			bitmapFromCoverFile(file('broken.jpg', 'image/jpeg'), {
+				createBitmap: async () => {
+					throw new Error('bad jpeg');
+				},
+				convertHeic,
+				detectHeic: async () => false
+			})
+		).rejects.toThrow(COVER_MESSAGES.unreadable);
+		expect(convertHeic).not.toHaveBeenCalled();
+	});
+
+	it('surfaces a readable error when HEIC conversion also fails', async () => {
+		await expect(
+			bitmapFromCoverFile(file('bad.heic', 'image/heic'), {
+				createBitmap: async () => {
+					throw new Error('no native heic');
+				},
+				convertHeic: async () => {
+					throw new Error('wasm failed');
+				},
+				detectHeic: async () => true
+			})
+		).rejects.toThrow(COVER_MESSAGES.unreadable);
 	});
 });

@@ -110,18 +110,20 @@ export function CoverPhotoField({
 	}
 
 	async function acceptFile(file: File | undefined) {
+		if (!file) return;
+
+		const loadId = loadIdRef.current + 1;
+		loadIdRef.current = loadId;
 		setError('');
 		setWarning('');
-		if (!file) return;
 
 		const check = validateCoverFile(file);
 		if (!check.ok) {
 			setError(check.error);
+			setReading(false);
 			return;
 		}
 
-		const loadId = loadIdRef.current + 1;
-		loadIdRef.current = loadId;
 		setReading(true);
 		resetCrop();
 		try {
