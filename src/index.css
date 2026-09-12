@@ -89,7 +89,8 @@ textarea {
 	cursor: not-allowed;
 }
 
-:focus-visible:not(input):not(textarea):not(select) {
+/* The compose bubble carries focus for its bare fields, including the story editor. */
+:focus-visible:not(input):not(textarea):not(select):not(.rich-editor) {
 	outline: 3px solid var(--color-accent);
 	outline-offset: 3px;
 }
@@ -208,7 +209,9 @@ textarea {
 }
 
 /* The last bubble in a received run carries the tail. */
-.thread-group > :last-child {
+.thread-group > :last-child,
+.thread-group > .reveal-rows:last-child > * > :last-child,
+.thread-group:has(> .reveal-rows:last-child:not(.is-open)) > :nth-last-child(2) {
 	border-bottom-left-radius: 0.5rem;
 }
 

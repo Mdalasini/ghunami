@@ -21,7 +21,16 @@ import {
 	StoryToolbar
 } from '../components/StoryEditor';
 import { HorizonMark, Tip } from '../components/Tip';
-import { type CreateDraft, formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
+import { Reveal } from '../components/Reveal';
+import {
+	type CreateDraft,
+	clearCover,
+	formatGoal,
+	getDraft,
+	patchDraft,
+	resetDraft,
+	subscribeDraft
+} from '../lib/draft';
 import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
 
 const STEPS = [
@@ -347,7 +356,7 @@ export default function Create() {
 
 	async function skipCover() {
 		if (busy || active !== 2) return;
-		coverField.current?.clear();
+		clearCover();
 		patchDraft({ coverSkipped: true });
 		if (editing !== null) {
 			setEditing(null);
@@ -414,11 +423,14 @@ export default function Create() {
 	}
 
 	function tip(n: number) {
-		if (n === 2 && !(active === 2 && coverCropping)) {
+		if (n === 2) {
+			// Collapses while cropping to leave room for the tray, without the thread jumping.
 			return (
-				<Tip title="Choosing a photo">
-					<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
-				</Tip>
+				<Reveal open={!(active === 2 && coverCropping)} className="self-start">
+					<Tip title="Choosing a photo">
+						<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
+					</Tip>
+				</Reveal>
 			);
 		}
 		if (n === 3) {

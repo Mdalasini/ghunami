@@ -30,6 +30,9 @@ import { Reveal } from './Reveal';
 
 const Cropper = lazy(() => import('react-easy-crop'));
 
+/* Matches the `.reveal-rows` transition in index.css. */
+const TRAY_CLOSE_MS = 320;
+
 export type CoverPhotoFieldHandle = {
 	confirm: () => Promise<boolean>;
 	openPicker: () => void;
@@ -68,6 +71,9 @@ export function CoverPhotoField({
 	const [warning, setWarning] = useState('');
 	const [reading, setReading] = useState(false);
 	const [processing, setProcessing] = useState(false);
+	/* Removing keeps the photo mounted while the tray collapses, then clears for real. */
+	const [closing, setClosing] = useState(false);
+	const closeTimer = useRef(0);
 	const maxZoom = pending ? maxCoverZoom(pending.width, pending.height) : 1;
 	const changeZoom = (value: number) => setZoom(Math.max(1, Math.min(maxZoom, value)));
 
@@ -99,6 +105,7 @@ export function CoverPhotoField({
 	useEffect(() => {
 		return () => {
 			loadIdRef.current += 1;
+			window.clearTimeout(closeTimer.current);
 			releaseDecodedCover(decodedRef.current);
 			decodedRef.current = null;
 		};
@@ -112,12 +119,16 @@ export function CoverPhotoField({
 	);
 
 	useEffect(() => {
+		if (closing) {
+			publishReady(false);
+			return;
+		}
 		if (pending) {
 			publishReady(cropQuality !== null && cropQuality !== 'too_small' && !reading && !processing);
 			return;
 		}
 		publishReady(coverUrl !== '' && !reading && !processing);
-	}, [pending, cropQuality, coverUrl, reading, processing, publishReady]);
+	}, [pending, cropQuality, coverUrl, reading, processing, closing, publishReady]);
 
 	function replacePending(next: DecodedCover | null) {
 		releaseDecodedCover(decodedRef.current);
@@ -137,6 +148,8 @@ export function CoverPhotoField({
 
 		const loadId = loadIdRef.current + 1;
 		loadIdRef.current = loadId;
+		window.clearTimeout(closeTimer.current);
+		setClosing(false);
 		setError('');
 		setWarning('');
 
@@ -232,7 +245,7 @@ export function CoverPhotoField({
 		}
 	}
 
-	function clear() {
+	function clearNow() {
 		loadIdRef.current += 1;
 		replacePending(null);
 		resetCrop();
@@ -242,7 +255,19 @@ export function CoverPhotoField({
 		setError('');
 		setWarning('');
 		setReading(false);
-		if (coverUrl) clearCover();
+		setClosing(false);
+		if (getDraft().coverUrl) clearCover();
+	}
+
+	function clear() {
+		if (closing) return;
+		if (!pending && coverUrl === '' && !reading) {
+			clearNow();
+			return;
+		}
+		setClosing(true);
+		window.clearTimeout(closeTimer.current);
+		closeTimer.current = window.setTimeout(clearNow, TRAY_CLOSE_MS);
 	}
 
 	confirmRef.current = confirm;
@@ -256,7 +281,7 @@ export function CoverPhotoField({
 	const showCropper = Boolean(pending);
 	const helper = 'Drag to reposition · zoom is limited to preserve photo quality';
 	const hasAttachment = showCropper || coverUrl !== '';
-	const open = hasAttachment || reading;
+	const open = (hasAttachment || reading) && !closing;
 
 	return (
 		<>
@@ -276,7 +301,7 @@ export function CoverPhotoField({
 					} : undefined}
 					role="presentation"
 				>
-					{hasAttachment && !processing && (
+					{hasAttachment && !processing && !closing && (
 						<button
 							type="button"
 							className="absolute top-3 right-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-card/95 text-ink shadow-md transition-colors hover:bg-card hover:text-error"
