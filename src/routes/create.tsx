@@ -21,7 +21,6 @@ import {
 	StoryToolbar
 } from '../components/StoryEditor';
 import { HorizonMark, Tip } from '../components/Tip';
-import { Reveal } from '../components/Reveal';
 import {
 	type CoverSnapshot,
 	clearCover,
@@ -47,6 +46,8 @@ const STEPS = [
 const LAST = STEPS.length;
 const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
 const TYPING_MS = 700;
+/* A beat between your message landing and the typing bubble, so they read as two events. */
+const REPLY_GAP_MS = 180;
 const SKIP_COVER_MESSAGE = 'I’ll return to this later';
 /* Long enough to cover the reveal transitions above plus the composer swap. */
 const PIN_MS = 420;
@@ -243,7 +244,7 @@ export default function Create() {
 	useEffect(() => {
 		pinToEnd(PIN_MS);
 		return () => cancelAnimationFrame(pinFrame.current);
-	}, [step, typing, done, editing, coverCropping, coverReady]);
+	}, [step, typing, done, editing, coverReady]);
 
 	/* Leaving mid-edit keeps whatever is in the draft; the held original must not outlive the route. */
 	useEffect(() => () => releaseHeldCover(), []);
@@ -344,6 +345,8 @@ export default function Create() {
 		const id = ++replyId.current;
 		setSending(true);
 		next();
+		await sleep(REPLY_GAP_MS);
+		if (replyId.current !== id) return;
 		setTyping(true);
 		await sleep(TYPING_MS);
 		// A newer reply or a jump via goTo owns the flags now; don't clear them from a stale reply.
@@ -440,15 +443,22 @@ export default function Create() {
 		if (active === 2) coverField.current?.addFile(event.dataTransfer.files[0]);
 	}
 
+	/* Enter anywhere in the composer or the photo tray sends the cover, except on other buttons. */
+	function onCoverKeydown(event: KeyboardEvent<HTMLElement>) {
+		if (active !== 2 || done || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+		if (!coverReady) return;
+		const target = event.target as HTMLElement;
+		if (target.closest('button:not(.send-btn):not([data-photo-prompt])')) return;
+		event.preventDefault();
+		void goNext();
+	}
+
 	function tip(n: number) {
 		if (n === 2) {
-			// Collapses while cropping to leave room for the tray, without the thread jumping.
 			return (
-				<Reveal open={!(active === 2 && coverCropping)} className="self-start">
-					<Tip title="Choosing a photo">
-						<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
-					</Tip>
-				</Reveal>
+				<Tip title="Choosing a photo">
+					<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
+				</Tip>
 			);
 		}
 		if (n === 3) {
@@ -632,7 +642,25 @@ export default function Create() {
 			</main>
 
 			<footer ref={footerRef} className="sticky bottom-0 z-10 border-t-2 border-line bg-paper/95 backdrop-blur">
-				<div className="mx-auto flex w-full max-w-[40rem] flex-col gap-3 px-4 py-3">
+				<div
+					className="mx-auto flex w-full max-w-[40rem] flex-col gap-3 px-4 py-3"
+					onKeyDown={onCoverKeydown}
+					onDragOver={(event) => {
+						if (active !== 2 || done) return;
+						event.preventDefault();
+						setDragging(true);
+					}}
+					onDragLeave={() => setDragging(false)}
+					onDrop={onDrop}
+				>
+					{/* Mounted for the whole flow so the tray can lower after send, not vanish with the form. */}
+					<CoverPhotoField
+						ref={coverField}
+						active={active === 2 && !done}
+						coverUrl={draft.coverUrl}
+						onReadyChange={setCoverReady}
+						onCroppingChange={setCoverCropping}
+					/>
 					{done ? (
 						<div className="flex items-center justify-between gap-4 py-1">
 							<button
@@ -676,21 +704,6 @@ export default function Create() {
 								event.preventDefault();
 								void goNext();
 							}}
-							onKeyDown={(event) => {
-								if (active !== 2 || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
-								if (!coverReady) return;
-								const target = event.target as HTMLElement;
-								if (target.closest('button:not(.send-btn):not([data-photo-prompt])')) return;
-								event.preventDefault();
-								void goNext();
-							}}
-							onDragOver={(event) => {
-								if (active !== 2) return;
-								event.preventDefault();
-								setDragging(true);
-							}}
-							onDragLeave={() => setDragging(false)}
-							onDrop={onDrop}
 						>
 							{editing !== null && (
 								<div className="flex items-center justify-between gap-3 px-2">
@@ -729,15 +742,6 @@ export default function Create() {
 										</button>
 									))}
 								</div>
-							)}
-
-							{active === 2 && (
-								<CoverPhotoField
-									ref={coverField}
-									coverUrl={draft.coverUrl}
-									onReadyChange={setCoverReady}
-									onCroppingChange={setCoverCropping}
-								/>
 							)}
 
 							{active === 4 && <StoryToolbar formats={storyFormats} editor={storyRef} />}
