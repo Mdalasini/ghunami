@@ -1,7 +1,13 @@
+export type CoverEdit = {
+	original: File;
+	crop: { x: number; y: number; width: number; height: number };
+};
+
 export type CreateDraft = {
 	goal: number | null;
 	coverUrl: string;
 	coverName: string;
+	coverEdit?: CoverEdit;
 	title: string;
 	story: string;
 };
@@ -40,12 +46,13 @@ export function resetDraft() {
 	emit();
 }
 
-export function setCover(file: File) {
+export function setCover(file: File, coverEdit?: CoverEdit) {
 	if (draft.coverUrl) URL.revokeObjectURL(draft.coverUrl);
 	draft = {
 		...draft,
 		coverUrl: URL.createObjectURL(file),
-		coverName: file.name
+		coverName: file.name,
+		coverEdit
 	};
 	emit();
 }

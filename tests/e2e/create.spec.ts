@@ -149,6 +149,14 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Continue' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
+	await expect(slider).toBeVisible();
+	await expect(slider).toHaveValue(maximum!);
+	await expect(slider).toHaveAttribute('max', maximum!);
+	await expect(viewport).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 });
 
 const RED = [200, 24, 24] as const;

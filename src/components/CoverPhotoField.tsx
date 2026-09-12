@@ -25,7 +25,7 @@ import {
 	type CropQuality,
 	type DecodedCover
 } from '../lib/coverImage';
-import { setCover } from '../lib/draft';
+import { getDraft, setCover } from '../lib/draft';
 import { CoverImage } from './CoverImage';
 
 const Cropper = lazy(() => import('react-easy-crop'));
@@ -50,6 +50,8 @@ export function CoverPhotoField({
 	const cropViewport = useRef<HTMLDivElement>(null);
 	const [cropSize, setCropSize] = useState<{ width: number; height: number }>();
 	const decodedRef = useRef<DecodedCover | null>(null);
+	const originalRef = useRef<File | null>(null);
+	const [initialCrop, setInitialCrop] = useState<Area>();
 	const cropPercentRef = useRef<Area | null>(null);
 	const confirmRef = useRef<() => Promise<boolean>>(async () => false);
 	const loadIdRef = useRef(0);
@@ -81,6 +83,8 @@ export function CoverPhotoField({
 
 	useEffect(() => {
 		setClient(true);
+		const saved = getDraft().coverEdit;
+		if (saved) void acceptFile(saved.original, saved.crop);
 	}, []);
 
 	useEffect(() => {
@@ -126,7 +130,7 @@ export function CoverPhotoField({
 		setCropQuality(null);
 	}
 
-	async function acceptFile(file: File | undefined) {
+	async function acceptFile(file: File | undefined, savedCrop?: Area) {
 		if (!file) return;
 
 		const loadId = loadIdRef.current + 1;
@@ -150,6 +154,8 @@ export function CoverPhotoField({
 				return;
 			}
 			replacePending(decoded);
+			originalRef.current = file;
+			setInitialCrop(savedCrop);
 			setFileName(file.name);
 			setWarning('');
 			requestAnimationFrame(() => {
@@ -196,13 +202,6 @@ export function CoverPhotoField({
 		setWarning(quality === 'soft' ? COVER_MESSAGES.soft : '');
 	}
 
-	function cancelPending() {
-		replacePending(null);
-		setFileName('');
-		resetCrop();
-		setError('');
-		setWarning('');
-	}
 
 	async function confirm() {
 		if (processing || reading) return false;
@@ -223,7 +222,10 @@ export function CoverPhotoField({
 		setProcessing(true);
 		try {
 			const { file } = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
-			setCover(file);
+			setCover(file, originalRef.current ? {
+				original: originalRef.current,
+				crop: cropPercent
+			} : undefined);
 			setWarning(quality === 'soft' ? COVER_MESSAGES.soft : '');
 			replacePending(null);
 			resetCrop();
@@ -291,7 +293,9 @@ export function CoverPhotoField({
 									}
 								>
 									<Cropper
+										key={pending.previewUrl}
 										image={pending.previewUrl}
+										initialCroppedAreaPercentages={initialCrop}
 										crop={crop}
 										zoom={zoom}
 										rotation={0}
@@ -343,15 +347,7 @@ export function CoverPhotoField({
 								</div>
 							)}
 							<div className="absolute top-3 right-3 z-10 flex gap-2">
-								{coverUrl ? (
-									<button
-										type="button"
-										className="rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
-										onClick={cancelPending}
-									>
-										Cancel
-									</button>
-								) : null}
+
 								<button
 									type="button"
 									className="rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
