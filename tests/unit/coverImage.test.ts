@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	assessCropResolution,
+	coverZoomLimit,
 	maxCoverZoom,
+	percentToZoom,
+	zoomOneCrop,
+	zoomToPercent,
 	COVER_ASPECT,
 	bitmapFromCoverFile,
 	clampPixelCrop,
@@ -87,6 +91,50 @@ describe('crop resolution', () => {
 		'disables zoom for a low-resolution %i×%i original',
 		(width, height) => expect(maxCoverZoom(width, height)).toBe(1)
 	);
+
+	it('gives no zoom headroom when the widest crop is only just sharp', () => {
+		expect(maxCoverZoom(720, 900)).toBe(1);
+		expect(maxCoverZoom(721, 901)).toBe(1);
+	});
+
+	it('keeps the crop sharp at the limit even after rounding shaves a pixel off each edge', () => {
+		for (const [width, height] of [[1000, 1250], [1080, 1350], [3024, 4032], [4032, 3024], [1200, 1200]]) {
+			const zoom = maxCoverZoom(width, height);
+			const cropWidth = Math.min(width, height * COVER_ASPECT) / zoom;
+			const cropHeight = cropWidth / COVER_ASPECT;
+			expect(assessCropResolution(Math.round(cropWidth) - 1, Math.round(cropHeight) - 1)).toBe('ok');
+		}
+	});
+
+	it('derives the limit from the crop the cropper actually shows at zoom 1', () => {
+		// A 4000×3000 original shown as a 677.33×508 preview in a 406×508 crop window: the crop is 2400×3000 px.
+		const base = zoomOneCrop({ width: 406, height: 508 }, { width: 677.33, height: 508 }, { width: 4000, height: 3000 });
+		expect(base.width).toBeCloseTo(2398, 0);
+		expect(base.height).toBe(3000);
+		expect(coverZoomLimit(base.width, base.height)).toBe(3.32);
+		expect(coverZoomLimit(720, 900)).toBe(1);
+		expect(coverZoomLimit(600, 750)).toBe(1);
+		expect(coverZoomLimit(8000, 10000)).toBe(4);
+	});
+
+	it('returns an empty crop when the cropper has not measured anything yet', () => {
+		expect(zoomOneCrop({ width: 0, height: 0 }, { width: 0, height: 0 }, { width: 4000, height: 3000 })).toEqual({
+			width: 0,
+			height: 0
+		});
+	});
+
+	it('maps the whole slider onto the allowed zoom range', () => {
+		expect(zoomToPercent(1, 1.11)).toBe(0);
+		expect(zoomToPercent(1.11, 1.11)).toBe(100);
+		expect(zoomToPercent(1.055, 1.11)).toBeCloseTo(50);
+		expect(percentToZoom(0, 3.33)).toBe(1);
+		expect(percentToZoom(100, 3.33)).toBeCloseTo(3.33);
+		expect(percentToZoom(50, 3)).toBe(2);
+		expect(percentToZoom(150, 3)).toBe(3);
+		expect(zoomToPercent(2, 1)).toBe(0);
+		expect(percentToZoom(50, 1)).toBe(1);
+	});
 	it('treats 720×900 and above as sharp', () => {
 		expect(assessCropResolution(720, 900)).toBe('ok');
 		expect(assessCropResolution(1080, 1350)).toBe('ok');
