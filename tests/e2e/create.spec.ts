@@ -151,6 +151,18 @@ test('can skip the cover, remove a chosen photo, and return to it later', async 
 	await expect
 		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
 		.toBe(1080);
+
+	// Cancelling while the removal is still lowering the tray must not let that removal land on the restored cover.
+	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await page.getByRole('button', { name: 'Remove photo' }).click();
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await page.waitForTimeout(600);
+	await expect(cover).toBeVisible();
+	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
+	await expect
+		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+		.toBe(1080);
 });
 
 test('keeps simple story formatting', async ({ page }) => {

@@ -350,7 +350,11 @@ export function CoverPhotoField({
 		closeThen(clearNow);
 	}
 
-	/* Leaving the step closes the tray and then releases the photo; it was either sent or discarded. */
+	/*
+	 * Leaving the step closes the tray and then releases the photo; it was either sent or discarded.
+	 * From here the caller owns the draft's cover (Cancel restored it, Send or Skip replaced it), so a
+	 * removal still queued from this step must not run against it.
+	 */
 	useEffect(() => {
 		if (active) {
 			sentRef.current = false;
@@ -358,6 +362,7 @@ export function CoverPhotoField({
 		}
 		const sent = sentRef.current;
 		sentRef.current = false;
+		onClosedRef.current = null;
 		if (!decodedRef.current && !reading) return;
 		closeThen(dropPending, sent ? 'sent' : 'lower');
 	}, [active]);
