@@ -132,6 +132,13 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	const cropBounds = await frame.boundingBox();
 	expect(bounds).not.toBeNull();
 	expect(cropBounds).not.toBeNull();
+	expect(bounds!.width).toBeLessThanOrEqual(448);
+	expect(bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 300);
+	await expect.poll(async () => {
+		const controls = await slider.boundingBox();
+		const continueButton = await page.getByRole('button', { name: 'Continue' }).boundingBox();
+		return controls!.y + controls!.height < continueButton!.y;
+	}).toBe(true);
 	expect(Math.abs(bounds!.width - cropBounds!.width)).toBeLessThanOrEqual(1);
 	expect(Math.abs(bounds!.height - cropBounds!.height)).toBeLessThanOrEqual(1);
 	await viewport.hover();

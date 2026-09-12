@@ -261,6 +261,10 @@ export function CoverPhotoField({
 				className={`compose-card ml-15 overflow-hidden rounded-3xl rounded-tr-lg border-2 bg-card transition-colors duration-150 ${
 					dragging ? 'border-accent' : 'border-line'
 				}`}
+				style={showCropper ? {
+					width: 'min(100%, 28rem, max(12rem, calc(80dvh - 240px)))',
+					marginInline: 'auto'
+				} : undefined}
 				role="presentation"
 				onDragOver={(event) => {
 					event.preventDefault();
@@ -275,7 +279,7 @@ export function CoverPhotoField({
 							ref={cropViewport}
 							className="relative w-full overflow-hidden bg-ink"
 							style={{ aspectRatio: COVER_ASPECT }}
-												>
+						>
 							{client && cropSize ? (
 								<Suspense
 									fallback={
@@ -293,7 +297,7 @@ export function CoverPhotoField({
 										rotation={0}
 										minZoom={1}
 										maxZoom={maxZoom}
-																				cropSize={cropSize}
+										cropSize={cropSize}
 										aspect={COVER_ASPECT}
 										cropShape="rect"
 										zoomSpeed={1}
@@ -365,7 +369,7 @@ export function CoverPhotoField({
 								type="range"
 								min={1}
 								max={maxZoom}
-																disabled={maxZoom === 1}
+								 disabled={maxZoom === 1}
 								step={0.01}
 								value={zoom}
 								onChange={(event) => changeZoom(Number(event.currentTarget.value))}
