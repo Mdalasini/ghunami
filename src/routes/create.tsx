@@ -725,7 +725,7 @@ export default function Create() {
 										onClick={() => coverField.current?.openPicker()}
 										onKeyDown={onPhotoPromptKeydown}
 									>
-										{coverReady || coverCropping ? 'Click to change ...' : 'Click to add ...'}
+										{coverReady || coverCropping ? 'Click to change' : 'Click to add'}
 									</button>
 								) : step === 3 ? (
 									<label className="flex min-h-10 min-w-0 flex-1 items-center pl-2">
