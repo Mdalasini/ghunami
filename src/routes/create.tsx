@@ -208,6 +208,7 @@ export default function Create() {
 	const sendRef = useRef<HTMLButtonElement>(null);
 	const endRef = useRef<HTMLDivElement>(null);
 	const scrollTimer = useRef<number>(0);
+	const replyId = useRef(0);
 
 	const currentStep = STEPS[step - 1];
 	if (!currentStep) {
@@ -268,6 +269,7 @@ export default function Create() {
 	}
 
 	function goTo(n: number) {
+		if (busy) return;
 		setDone(false);
 		setTyping(false);
 		setSending(false);
@@ -275,10 +277,13 @@ export default function Create() {
 	}
 
 	async function reply(next: () => void) {
+		const id = ++replyId.current;
 		setSending(true);
 		next();
 		setTyping(true);
 		await sleep(TYPING_MS);
+		// A newer reply or a jump via goTo owns the flags now; don't clear them from a stale reply.
+		if (replyId.current !== id) return;
 		setTyping(false);
 		setSending(false);
 	}
@@ -308,6 +313,7 @@ export default function Create() {
 	}
 
 	function startOver() {
+		replyId.current += 1;
 		resetDraft();
 		setGoalText('');
 		setCoverReady(false);
@@ -333,14 +339,6 @@ export default function Create() {
 		if (event.key !== 'Enter') return;
 		event.preventDefault();
 		if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
-			void goNext();
-		}
-	}
-
-	function onPhotoPromptKeydown(event: KeyboardEvent<HTMLButtonElement>) {
-		if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
-		if (coverReady) {
-			event.preventDefault();
 			void goNext();
 		}
 	}
@@ -723,7 +721,6 @@ export default function Create() {
 										data-photo-prompt
 										className="flex min-h-10 min-w-0 flex-1 items-center pl-1 text-left text-base text-hint"
 										onClick={() => coverField.current?.openPicker()}
-										onKeyDown={onPhotoPromptKeydown}
 									>
 										{coverReady || coverCropping ? 'Click to change' : 'Click to add'}
 									</button>
