@@ -89,12 +89,61 @@ export function assessCropResolution(width: number, height: number): CropQuality
 	return 'ok';
 }
 
+export const MAX_ZOOM_CEILING = 4;
+/*
+ * The cropper reports fractional crop edges that get rounded and clamped against the bitmap, which
+ * can shave a pixel off the crop. Keep the sharp threshold clear of that so zooming never causes a warning.
+ */
+const ZOOM_SAFETY_PX = 2;
+
+/*
+ * Largest zoom that keeps the crop sharp, given the crop the cropper shows at zoom 1 (in original
+ * pixels). Originals that are already soft or too small get no zoom at all.
+ */
+export function coverZoomLimit(cropWidth: number, cropHeight: number): number {
+	if (assessCropResolution(cropWidth, cropHeight) !== 'ok') return 1;
+	const limit = Math.min(
+		MAX_ZOOM_CEILING,
+		cropWidth / (SHARP_CROP_WIDTH + ZOOM_SAFETY_PX),
+		cropHeight / (SHARP_CROP_HEIGHT + ZOOM_SAFETY_PX)
+	);
+	return Math.max(1, Math.floor(limit * 100) / 100);
+}
+
+/* Zoom limit from the original's dimensions alone, before the cropper has measured its layout. */
 export function maxCoverZoom(width: number, height: number): number {
 	const cropWidth = Math.min(width, height * COVER_ASPECT);
-	const cropHeight = cropWidth / COVER_ASPECT;
-	// Keep low-resolution originals at their widest crop; never introduce a quality warning by zooming.
-	const limit = Math.min(4, cropWidth / SHARP_CROP_WIDTH, cropHeight / SHARP_CROP_HEIGHT);
-		return Math.max(1, Math.floor(limit * 100) / 100);
+	return coverZoomLimit(cropWidth, cropWidth / COVER_ASPECT);
+}
+
+/*
+ * The crop shown at zoom 1, in original pixels, derived from the cropper's measured layout. This is
+ * what the cropper actually reports, so a limit built on it is reachable and safe by construction.
+ */
+export function zoomOneCrop(
+	cropSize: { width: number; height: number },
+	mediaSize: { width: number; height: number },
+	original: { width: number; height: number }
+): { width: number; height: number } {
+	if (cropSize.width <= 0 || cropSize.height <= 0 || mediaSize.width <= 0 || mediaSize.height <= 0) {
+		return { width: 0, height: 0 };
+	}
+	return {
+		width: (cropSize.width / mediaSize.width) * original.width,
+		height: (cropSize.height / mediaSize.height) * original.height
+	};
+}
+
+/* Slider position (0–100) for a zoom within [1, maxZoom]. */
+export function zoomToPercent(zoom: number, maxZoom: number): number {
+	if (maxZoom <= 1) return 0;
+	return Math.max(0, Math.min(100, ((zoom - 1) / (maxZoom - 1)) * 100));
+}
+
+export function percentToZoom(percent: number, maxZoom: number): number {
+	if (maxZoom <= 1) return 1;
+	const clamped = Math.max(0, Math.min(100, percent));
+	return 1 + (clamped / 100) * (maxZoom - 1);
 }
 
 export function clampPixelCrop(

@@ -144,32 +144,50 @@ textarea {
 	animation: fly-in-sent 320ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
+/* The second bubble in a received run lands a beat after the first, so they read as two messages. */
+.thread-group > .bubble-in + .bubble-in {
+	animation-delay: 160ms;
+}
+
 /*
- * Height reveal. Content that appears grows from 0 so everything above it slides up instead
- * of jumping. `.reveal-rows` is toggled with a class; `.grow-in` plays once on mount.
+ * Photo tray. Anchored to the top edge of the composer and clipped there, so it rises from behind
+ * the composer over the thread and drops back down without moving anything in the thread. The
+ * duration is mirrored by TRAY_CLOSE_MS in CoverPhotoField.
  */
-.reveal-rows {
-	display: grid;
-	grid-template-rows: 0fr;
+.cover-tray-dock {
+	position: absolute;
+	inset-inline: 0;
+	bottom: 100%;
+	overflow: hidden;
+	pointer-events: none;
+	padding-top: 0.75rem;
+	padding-bottom: 0.75rem;
+}
+
+.cover-tray {
+	transform: translateY(calc(100% + 0.75rem));
 	opacity: 0;
 	visibility: hidden;
+	pointer-events: none;
+	will-change: transform, opacity;
 	transition:
-		grid-template-rows 320ms cubic-bezier(0.215, 0.61, 0.355, 1),
-		opacity 200ms ease,
+		transform 320ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
+		opacity 180ms ease-in 140ms,
 		visibility 0s linear 320ms;
 }
 
-.reveal-rows > * {
-	overflow: hidden;
-}
-
-.reveal-rows.is-open {
-	grid-template-rows: 1fr;
+.cover-tray.is-raised {
+	transform: translateY(0);
 	opacity: 1;
 	visibility: visible;
-	transition-delay: 0s;
+	pointer-events: auto;
+	transition:
+		transform 360ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 200ms ease-out,
+		visibility 0s;
 }
 
+/* `.grow-in` plays once on mount: content grows from 0 so everything above slides up instead of jumping. */
 @keyframes grow-rows {
 	from {
 		grid-template-rows: 0fr;
@@ -209,9 +227,7 @@ textarea {
 }
 
 /* The last bubble in a received run carries the tail. */
-.thread-group > :last-child,
-.thread-group > .reveal-rows:last-child > * > :last-child,
-.thread-group:has(> .reveal-rows:last-child:not(.is-open)) > :nth-last-child(2) {
+.thread-group > :last-child {
 	border-bottom-left-radius: 0.5rem;
 }
 
