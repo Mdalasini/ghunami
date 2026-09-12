@@ -330,16 +330,6 @@ export function CoverPhotoField({
 									</p>
 								</div>
 							)}
-							<div className="absolute top-3 right-3 z-10 flex gap-2">
-
-								<button
-									type="button"
-									className="rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
-									onClick={() => fileInput.current?.click()}
-								>
-									Change
-								</button>
-							</div>
 						</div>
 						<label className="flex items-center gap-3 px-5 py-3">
 							<span className="text-xs font-extrabold tracking-wider text-mute uppercase">
@@ -365,13 +355,6 @@ export function CoverPhotoField({
 				) : coverUrl ? (
 					<div className="relative">
 						<CoverImage src={coverUrl} alt="Your cover" className="mx-auto w-full max-w-[16rem]" />
-						<button
-							type="button"
-							className="absolute top-3 right-3 rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
-							onClick={() => fileInput.current?.click()}
-						>
-							Change
-						</button>
 					</div>
 				) : (
 					<p className="px-5 py-4 text-sm font-extrabold tracking-wider text-mute uppercase">
