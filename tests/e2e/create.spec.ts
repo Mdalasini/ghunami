@@ -1,6 +1,33 @@
-import { type Locator } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { pngFromPixels, solidPng } from './png';
+
+type Box = { x: number; y: number; width: number; height: number };
+
+/* Bubbles land with a short scale animation; wait until two reads 100 ms apart agree. */
+async function settledBox(page: Page, locator: Locator): Promise<Box> {
+	let box: Box | null = null;
+	await expect
+		.poll(async () => {
+			const first = await locator.boundingBox();
+			await page.waitForTimeout(100);
+			const second = await locator.boundingBox();
+			if (!first || !second || JSON.stringify(first) !== JSON.stringify(second)) return false;
+			box = second;
+			return true;
+		})
+		.toBe(true);
+	if (!box) throw new Error('Element never settled');
+	return box;
+}
+
+/* Sub-pixel noise from animation frames is not a reflow; anything at or above half a pixel is. */
+function expectSameBox(actual: Box | null, expected: Box) {
+	expect(actual).not.toBeNull();
+	for (const key of ['x', 'y', 'width', 'height'] as const) {
+		expect(Math.abs(actual![key] - expected[key])).toBeLessThan(0.5);
+	}
+}
 
 const sharpCover = {
 	name: 'cover.png',
@@ -389,14 +416,9 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	await expect(heading).toBeVisible();
 	await expect(tip).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
-	// The composer's suggestion row folds away after the goal is sent; let the layout settle first.
-	await expect.poll(async () => {
-		const first = await heading.boundingBox();
-		await page.waitForTimeout(100);
-		return JSON.stringify(first) === JSON.stringify(await heading.boundingBox());
-	}).toBe(true);
-	const before = await heading.boundingBox();
-	const tipBefore = await tip.boundingBox();
+	// The bubbles are still landing and the suggestion row is folding away; let the layout settle first.
+	const before = await settledBox(page, heading);
+	const tipBefore = await settledBox(page, tip);
 
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	const tray = page.locator('.cover-tray');
@@ -404,8 +426,8 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	const cropper = page.locator('.cover-crop-container');
 	await cropper.hover();
 	// The tray overlays the thread: nothing behind it was reflowed or hidden.
-	expect(await heading.boundingBox()).toEqual(before);
-	expect(await tip.boundingBox()).toEqual(tipBefore);
+	expectSameBox(await heading.boundingBox(), before);
+	expectSameBox(await tip.boundingBox(), tipBefore);
 	await expect(tip).toHaveCount(1);
 	const trayBox = await tray.boundingBox();
 	const footer = await page.getByRole('contentinfo').boundingBox();
@@ -415,8 +437,8 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	await page.getByRole('button', { name: 'Remove photo' }).click();
 	await expect(tray).not.toHaveClass(/is-raised/);
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeHidden();
-	expect(await heading.boundingBox()).toEqual(before);
-	expect(await tip.boundingBox()).toEqual(tipBefore);
+	expectSameBox(await heading.boundingBox(), before);
+	expectSameBox(await tip.boundingBox(), tipBefore);
 
 	// Sending lowers the tray too; the thread keeps the tip, and the cover lands as the next message.
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
