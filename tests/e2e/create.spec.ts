@@ -34,7 +34,20 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await page.getByRole('button', { name: 'Continue' }).click();
 
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
-	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	const sentCover = page.getByRole('img', { name: 'Your cover' });
+	await expect(sentCover).toBeVisible();
+	await expect
+		.poll(async () => sentCover.evaluate((img) => [(img as HTMLImageElement).naturalWidth, (img as HTMLImageElement).naturalHeight]))
+		.toEqual([1080, 1350]);
+	const encoded = await sentCover.evaluate(async (img) => {
+		const image = img as HTMLImageElement;
+		const response = await fetch(image.src);
+		const blob = await response.blob();
+		return { type: blob.type, size: blob.size };
+	});
+	expect(['image/jpeg', 'image/webp']).toContain(encoded.type);
+	expect(encoded.size).toBeGreaterThan(0);
+	expect(encoded.size).toBeLessThanOrEqual(1024 * 1024);
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
 	await page.getByRole('button', { name: 'Continue' }).click();
 

@@ -271,7 +271,11 @@ export async function decodeCoverImage(file: File): Promise<DecodedCover> {
 export function releaseDecodedCover(decoded: DecodedCover | null | undefined) {
 	if (!decoded) return;
 	URL.revokeObjectURL(decoded.previewUrl);
-	decoded.bitmap.close();
+	try {
+		decoded.bitmap.close();
+	} catch {
+		// ImageBitmap.close() throws if it was already closed.
+	}
 }
 
 export function drawCoverCrop(

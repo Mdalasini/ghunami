@@ -46,6 +46,7 @@ export function CoverPhotoField({
 	const decodedRef = useRef<DecodedCover | null>(null);
 	const cropPercentRef = useRef<Area | null>(null);
 	const confirmRef = useRef<() => Promise<boolean>>(async () => false);
+	const loadIdRef = useRef(0);
 	const [dragging, setDragging] = useState(false);
 	const [client, setClient] = useState(false);
 	const [pending, setPending] = useState<DecodedCover | null>(null);
@@ -64,6 +65,7 @@ export function CoverPhotoField({
 
 	useEffect(() => {
 		return () => {
+			loadIdRef.current += 1;
 			releaseDecodedCover(decodedRef.current);
 			decodedRef.current = null;
 		};
@@ -108,19 +110,28 @@ export function CoverPhotoField({
 			return;
 		}
 
+		const loadId = loadIdRef.current + 1;
+		loadIdRef.current = loadId;
 		setReading(true);
 		resetCrop();
 		try {
 			const decoded = await decodeCoverImage(file);
+			if (loadId !== loadIdRef.current) {
+				releaseDecodedCover(decoded);
+				return;
+			}
 			replacePending(decoded);
 			setFileName(file.name);
 			setWarning('');
 		} catch (caught) {
+			if (loadId !== loadIdRef.current) return;
 			replacePending(null);
 			setFileName('');
 			setError(caught instanceof Error ? caught.message : COVER_MESSAGES.unreadable);
 		} finally {
-			setReading(false);
+			if (loadId === loadIdRef.current) {
+				setReading(false);
+			}
 		}
 	}
 
@@ -136,6 +147,8 @@ export function CoverPhotoField({
 	}
 
 	function onCropComplete(croppedArea: Area) {
+		// Percentages are of the original bitmap. Do not use croppedAreaPixels from
+		// the cropper — those are measured against the downscaled preview image.
 		cropPercentRef.current = croppedArea;
 		const decoded = decodedRef.current;
 		if (!decoded) return;
@@ -366,7 +379,7 @@ export function CoverPhotoField({
 					{error}
 				</p>
 			) : warning ? (
-				<p className="ml-15 text-sm font-medium text-mute" role="status">
+				<p className="ml-15 text-sm font-medium text-mute" role="status" aria-live="polite">
 					{warning}
 				</p>
 			) : null}
