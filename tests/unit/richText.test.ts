@@ -17,7 +17,8 @@ describe('sanitizeStoryHtml', () => {
 			sanitizeStoryHtml(
 				'<p style="color:red" onclick="x()">Hello <span class="a">there</span> <a href="javascript:alert(1)">link</a></p><script>alert(1)</script><!-- c -->'
 			)
-		).toBe('<p>Hello there link</p>alert(1)');
+		).toBe('<p>Hello there link</p>');
+		expect(sanitizeStoryHtml('<style>p{color:red}</style><p>ok</p><script>never closed')).toBe('<p>ok</p>');
 	});
 
 	it('closes unbalanced tags and ignores stray closers', () => {

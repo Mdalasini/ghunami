@@ -19,15 +19,29 @@ export function sanitizeStoryHtml(input: string): string {
 	const out: string[] = [];
 	const open: string[] = [];
 	let last = 0;
+	let skipUntil: string | null = null;
 
 	for (const match of input.matchAll(TAG_OR_COMMENT)) {
+		const rawName = match[1];
+		const name = rawName?.toLowerCase() ?? '';
+		const closing = match[0].startsWith('</');
+
+		if (skipUntil) {
+			if (closing && name === skipUntil) {
+				skipUntil = null;
+				last = match.index + match[0].length;
+			}
+			continue;
+		}
+
 		out.push(escapeText(input.slice(last, match.index)));
 		last = match.index + match[0].length;
 
-		const rawName = match[1];
 		if (!rawName) continue;
-		const name = rawName.toLowerCase();
-		const closing = match[0].startsWith('</');
+		if (!closing && (name === 'script' || name === 'style')) {
+			skipUntil = name;
+			continue;
+		}
 
 		if (name === 'br') {
 			if (!closing) out.push('<br>');
@@ -49,7 +63,7 @@ export function sanitizeStoryHtml(input: string): string {
 		}
 	}
 
-	out.push(escapeText(input.slice(last)));
+	if (!skipUntil) out.push(escapeText(input.slice(last)));
 	while (open.length) {
 		out.push(`</${open.pop()}>`);
 	}

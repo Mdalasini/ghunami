@@ -68,21 +68,92 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
-	const review = page.getByRole('region', { name: 'Your draft' });
-	await expect(review.getByText('Help Maya get home')).toBeVisible();
-	await expect(review.getByText('Raising travel money so Maya can get home safely.')).toBeVisible();
-	await expect(review.getByText(/100,000/)).toBeVisible();
-	await expect(review.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	await expect(page.getByText('Tap anything to change it.')).toBeVisible();
+	await expect(page.getByRole('region', { name: 'Your draft' })).toHaveCount(0);
+	const titleAnswer = page.getByRole('button', { name: 'Change your answer to step 3' });
+	await expect(titleAnswer).toHaveText('Help Maya get home');
+	await expect(page.getByRole('button', { name: 'Change your answer to step 4' })).toHaveText(
+		'Raising travel money so Maya can get home safely.'
+	);
+	await expect(page.getByRole('button', { name: 'Change your answer to step 1' })).toHaveText(/100,000/);
+	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
 
-	await review.getByRole('button', { name: 'Edit' }).first().click();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	// Editing happens in place: fix the title and land back on the review, not on the story step again.
+	await titleAnswer.click();
+	await expect(page.getByRole('contentinfo').getByText('Editing the title')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya fly home');
 	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'Tell people what happened' })).toBeVisible();
+
+	await expect(page.getByText('Editing the title')).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+	await expect(titleAnswer).toHaveText('Help Maya fly home');
+	await expect(page.getByRole('button', { name: 'Looks good' })).toBeVisible();
+
+	// Cancel restores the previous answer.
+	await page.getByRole('button', { name: 'Change your answer to step 1' }).click();
+	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('75000');
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Change your answer to step 1' })).toHaveText(/100,000/);
+});
+
+test('can skip the cover, remove a chosen photo, and return to it later', async ({ page }) => {
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByRole('heading', { name: 'Add a cover photo' })).toBeVisible();
+
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Remove photo' }).click();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeHidden();
+	await expect(page.getByRole('button', { name: 'Click to add' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+
+	await page.getByRole('button', { name: 'Skip for now' }).click();
+	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	const skipped = page.getByRole('button', { name: 'Change your answer to step 2' });
+	await expect(skipped).toHaveText('I’ll return to this later');
+
+	await skipped.click();
+	await expect(page.getByRole('contentinfo').getByText('Editing your cover photo')).toBeVisible();
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
+});
+
+test('keeps simple story formatting', async ({ page }) => {
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('button', { name: 'Skip for now' }).click();
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
 	await page.getByRole('button', { name: 'Send' }).click();
 
+	const story = page.getByRole('textbox', { name: 'Story' });
+	await expect(story).toBeVisible();
+	await story.click();
+	await page.getByRole('button', { name: 'Heading 1' }).click();
+	await page.keyboard.type('Maya');
+	await expect(page.getByRole('button', { name: 'Heading 1' })).toHaveAttribute('aria-pressed', 'true');
+	await page.keyboard.press('Shift+Enter');
+	await page.getByRole('button', { name: 'Normal text' }).click();
+	await page.keyboard.type('needs ');
+	await page.getByRole('button', { name: 'Bold' }).click();
+	await page.keyboard.type('help');
+	await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
+	await expect(page.getByText(/^\d+ \/ 4000$/)).toHaveText('15 / 4000');
+
+	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
-	await expect(page.getByRole('region', { name: 'Your draft' }).getByText('Help Maya fly home')).toBeVisible();
+	const answer = page.getByRole('button', { name: 'Change your answer to step 4' });
+	await expect(answer.locator('h1')).toHaveText('Maya');
+	await expect(answer.locator('strong')).toHaveText('help');
+	await expect(answer.locator('[style], [class*="color"], script')).toHaveCount(0);
 });
 
 test('rejects an empty goal and an unsupported or oversized cover', async ({ page }) => {
