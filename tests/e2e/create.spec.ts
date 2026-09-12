@@ -91,10 +91,20 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await expect(page.getByRole('button', { name: 'Looks good' })).toBeVisible();
 
 	// Cancel restores the previous answer.
-	await page.getByRole('button', { name: 'Change your answer to step 1' }).click();
+	const goalAnswer = page.getByRole('button', { name: 'Change your answer to step 1' });
+	await goalAnswer.click();
 	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('75000');
 	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Change your answer to step 1' })).toHaveText(/100,000/);
+	await expect(goalAnswer).toHaveText(/100,000/);
+
+	// Switching to another answer discards the unsent change too.
+	await goalAnswer.click();
+	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('');
+	await titleAnswer.click();
+	await expect(page.getByRole('contentinfo').getByText('Editing the title')).toBeVisible();
+	await expect(goalAnswer).toHaveText(/100,000/);
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(goalAnswer).toHaveText(/100,000/);
 });
 
 test('can skip the cover, remove a chosen photo, and return to it later', async ({ page }) => {
@@ -122,8 +132,21 @@ test('can skip the cover, remove a chosen photo, and return to it later', async 
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 	await page.getByRole('button', { name: 'Send' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
-	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	const cover = page.getByRole('img', { name: 'Your cover' });
+	await expect(cover).toBeVisible();
 	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
+
+	// Removing the cover during an edit and cancelling brings the original back, still loadable.
+	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await page.getByRole('button', { name: 'Remove photo' }).click();
+	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
+	await expect(cover).toHaveCount(0);
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(cover).toBeVisible();
+	await expect
+		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+		.toBe(1080);
 });
 
 test('keeps simple story formatting', async ({ page }) => {

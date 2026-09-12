@@ -23,12 +23,15 @@ import {
 import { HorizonMark, Tip } from '../components/Tip';
 import { Reveal } from '../components/Reveal';
 import {
-	type CreateDraft,
+	type CoverSnapshot,
 	clearCover,
 	formatGoal,
 	getDraft,
+	holdCover,
 	patchDraft,
+	releaseHeldCover,
 	resetDraft,
+	restoreHeldCover,
 	subscribeDraft
 } from '../lib/draft';
 import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
@@ -47,6 +50,8 @@ const TYPING_MS = 700;
 const SKIP_COVER_MESSAGE = 'I’ll return to this later';
 /* Long enough to cover the reveal transitions above plus the composer swap. */
 const PIN_MS = 420;
+
+type EditSnapshot = { goal?: number | null; title?: string; story?: string; cover?: CoverSnapshot };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -202,7 +207,7 @@ export default function Create() {
 	const footerRef = useRef<HTMLElement>(null);
 	const pinFrame = useRef(0);
 	const replyId = useRef(0);
-	const editSnapshot = useRef<Partial<CreateDraft>>({});
+	const editSnapshot = useRef<EditSnapshot>({});
 
 	const active = editing ?? step;
 	const activeStep = STEPS[active - 1];
@@ -292,33 +297,43 @@ export default function Create() {
 		setStep(n);
 	}
 
-	/* Change one earlier answer in place; the thread stays where it is. */
+	/* Change one earlier answer in place; the thread stays where it is. Any unsent edit is discarded first. */
 	function startEdit(n: number) {
 		if (busy || n >= step) return;
+		if (editing !== null) revertEdit(editing);
+		const current = getDraft();
 		editSnapshot.current = {
-			goal: draft.goal,
-			title: draft.title,
-			story: draft.story,
-			coverSkipped: draft.coverSkipped
+			goal: current.goal,
+			title: current.title,
+			story: current.story,
+			cover: holdCover()
 		};
 		setDone(false);
 		setEditing(n);
 	}
 
-	function cancelEdit() {
-		if (editing === null || busy) return;
+	function revertEdit(n: number) {
 		const snapshot = editSnapshot.current;
-		if (editing === 1) {
-			patchDraft({ goal: snapshot.goal ?? null });
-			setGoalText(snapshot.goal ? snapshot.goal.toLocaleString('en-KE') : '');
-		} else if (editing === 2) {
-			// A removed cover can't be restored (its object URL is gone); fall back to "later".
-			if (draft.coverUrl === '' && !draft.coverSkipped) patchDraft({ coverSkipped: true });
-		} else if (editing === 3) {
+		if (n === 1) {
+			const goal = snapshot.goal ?? null;
+			patchDraft({ goal });
+			setGoalText(goal !== null ? goal.toLocaleString('en-KE') : '');
+		} else if (n === 3) {
 			patchDraft({ title: snapshot.title ?? '' });
-		} else if (editing === 4) {
+		} else if (n === 4) {
 			patchDraft({ story: snapshot.story ?? '' });
 		}
+		if (snapshot.cover) restoreHeldCover(snapshot.cover);
+	}
+
+	function cancelEdit() {
+		if (editing === null || busy) return;
+		revertEdit(editing);
+		setEditing(null);
+	}
+
+	function commitEdit() {
+		releaseHeldCover();
 		setEditing(null);
 	}
 
@@ -343,7 +358,7 @@ export default function Create() {
 			if (!confirmed) return;
 		}
 		if (editing !== null) {
-			setEditing(null);
+			commitEdit();
 			return;
 		}
 		if (step >= LAST) {
@@ -359,7 +374,7 @@ export default function Create() {
 		clearCover();
 		patchDraft({ coverSkipped: true });
 		if (editing !== null) {
-			setEditing(null);
+			commitEdit();
 			return;
 		}
 		await reply(() => setStep(3));
