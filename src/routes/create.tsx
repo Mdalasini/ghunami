@@ -329,16 +329,12 @@ export default function Create() {
 		}
 	}
 
-	function onTitleKeydown(event: KeyboardEvent<HTMLTextAreaElement>) {
+	function onTitleKeydown(event: KeyboardEvent<HTMLInputElement>) {
 		if (event.key !== 'Enter') return;
 		event.preventDefault();
 		if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
 			void goNext();
 		}
-	}
-
-	function onTitleInput(event: ChangeEvent<HTMLTextAreaElement>) {
-		patchDraft({ title: event.currentTarget.value.replace(/[\n\r]/g, '') });
 	}
 
 	function onPhotoPromptKeydown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -734,14 +730,13 @@ export default function Create() {
 								) : step === 3 ? (
 									<label className="flex min-h-10 min-w-0 flex-1 items-center pl-2">
 										<span className="sr-only">Title</span>
-										<textarea
-											ref={fieldRef as RefObject<HTMLTextAreaElement | null>}
-											className="field-bare max-h-32 resize-none py-1.5 text-lg font-bold tracking-[-0.01em] wrap-break-word [field-sizing:content]"
-											rows={1}
+										<input
+											ref={fieldRef as RefObject<HTMLInputElement | null>}
+											className="field-bare min-w-0 flex-1 py-1.5 text-lg font-bold tracking-[-0.01em]"
 											maxLength={80}
 											placeholder="Help Maya get home"
 											value={draft.title}
-											onChange={onTitleInput}
+											onChange={(event) => patchDraft({ title: event.currentTarget.value })}
 											onKeyDown={onTitleKeydown}
 											disabled={typing}
 										/>
