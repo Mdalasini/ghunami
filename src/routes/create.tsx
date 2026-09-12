@@ -245,6 +245,9 @@ export default function Create() {
 		return () => cancelAnimationFrame(pinFrame.current);
 	}, [step, typing, done, editing, coverCropping, coverReady]);
 
+	/* Leaving mid-edit keeps whatever is in the draft; the held original must not outlive the route. */
+	useEffect(() => () => releaseHeldCover(), []);
+
 	/* The composer grows (photo tray, toolbar, long story); keep the last message above it. */
 	useEffect(() => {
 		const footer = footerRef.current;
