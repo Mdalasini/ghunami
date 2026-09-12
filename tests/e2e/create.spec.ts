@@ -28,11 +28,19 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Add a cover photo' })).toBeVisible();
+	await expect.poll(async () => {
+		const heading = await page.getByRole('heading', { name: 'Add a cover photo' }).boundingBox();
+		if (!heading) return false;
+		return heading.y >= 0 && heading.y + heading.height <= page.viewportSize()!.height;
+	}).toBe(true);
+	await expect(page.getByRole('button', { name: 'Click to add ...' })).toBeVisible();
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Click to change ...' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Change', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await page.keyboard.press('Enter');
 
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
 	const sentCover = page.getByRole('img', { name: 'Your cover' });
@@ -49,7 +57,10 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	expect(['image/jpeg', 'image/webp']).toContain(encoded.type);
 	expect(encoded.size).toBeGreaterThan(0);
 	expect(encoded.size).toBeLessThanOrEqual(1024 * 1024);
-	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
+	const title = page.getByRole('textbox', { name: 'Title' });
+	await title.fill('Help Maya get home');
+	await title.press('Control+Enter');
+	await expect(title).toHaveValue('Help Maya get home');
 	await page.getByRole('button', { name: 'Send' }).click();
 
 	await expect(page.getByRole('heading', { name: 'Tell people what happened' })).toBeVisible();

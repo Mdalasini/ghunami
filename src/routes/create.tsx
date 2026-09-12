@@ -80,17 +80,15 @@ function Typing() {
 function Sent({
 	n,
 	onEdit,
-	delivered,
 	children
 }: {
 	n: number;
 	onEdit?: (n: number) => void;
-	delivered: boolean;
 	children: ReactNode;
 }) {
 	const bubble = 'max-w-[85%] rounded-3xl rounded-br-lg bg-accent px-5 py-3 text-left text-base font-medium text-card';
 	return (
-		<div className="fly-sent flex flex-col items-end gap-1">
+		<div className="fly-sent flex justify-end">
 			{onEdit ? (
 				<button
 					type="button"
@@ -116,9 +114,6 @@ function Sent({
 				</button>
 			) : (
 				<div className={bubble}>{children}</div>
-			)}
-			{delivered && (
-				<p className="pr-1 text-[0.7rem] font-semibold tracking-wide text-hint">Delivered</p>
 			)}
 		</div>
 	);
@@ -156,9 +151,18 @@ function ReceiptRow({
 	);
 }
 
-function SendButton({ disabled, label = 'Send' }: { disabled: boolean; label?: string }) {
+function SendButton({
+	disabled,
+	label = 'Send',
+	buttonRef
+}: {
+	disabled: boolean;
+	label?: string;
+	buttonRef?: RefObject<HTMLButtonElement | null>;
+}) {
 	return (
 		<button
+			ref={buttonRef}
 			type="submit"
 			className={`send-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 ${
 				disabled ? 'bg-line text-mute' : 'bg-accent text-card hover:bg-accent-deep active:scale-95'
@@ -201,7 +205,9 @@ export default function Create() {
 	const [dragging, setDragging] = useState(false);
 	const coverField = useRef<CoverPhotoFieldHandle>(null);
 	const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+	const sendRef = useRef<HTMLButtonElement>(null);
 	const endRef = useRef<HTMLDivElement>(null);
+	const scrollTimer = useRef<number>(0);
 
 	const currentStep = STEPS[step - 1];
 	if (!currentStep) {
@@ -218,19 +224,30 @@ export default function Create() {
 	const busy = typing || sending || coverBusy;
 
 	function scrollToEnd(behavior: ScrollBehavior = 'smooth') {
+		const run = () => {
+			window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+		};
 		requestAnimationFrame(() => {
-			endRef.current?.scrollIntoView({ block: 'end', behavior });
+			run();
+			requestAnimationFrame(run);
 		});
 	}
 
 	useEffect(() => {
-		scrollToEnd();
-	}, [step, typing, done, coverCropping]);
+		scrollToEnd(typing ? 'instant' : 'smooth');
+		window.clearTimeout(scrollTimer.current);
+		scrollTimer.current = window.setTimeout(() => scrollToEnd('instant'), typing ? 50 : 320);
+		return () => window.clearTimeout(scrollTimer.current);
+	}, [step, typing, done, coverCropping, coverReady]);
 
 	useEffect(() => {
 		if (typing || done) return;
+		if (step === 2) {
+			if (coverReady) sendRef.current?.focus({ preventScroll: true });
+			return;
+		}
 		fieldRef.current?.focus({ preventScroll: true });
-	}, [step, typing, done]);
+	}, [step, typing, done, coverReady]);
 
 	function parseGoal(value: string) {
 		const digits = value.replace(/[^\d]/g, '');
@@ -304,7 +321,29 @@ export default function Create() {
 	}
 
 	function onEnter(event: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) {
-		if (event.key === 'Enter' && !event.shiftKey) {
+		if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+		if (event.shiftKey) return;
+		event.preventDefault();
+		if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+			void goNext();
+		}
+	}
+
+	function onTitleKeydown(event: KeyboardEvent<HTMLTextAreaElement>) {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+			void goNext();
+		}
+	}
+
+	function onTitleInput(event: ChangeEvent<HTMLTextAreaElement>) {
+		patchDraft({ title: event.currentTarget.value.replace(/[\n\r]/g, '') });
+	}
+
+	function onPhotoPromptKeydown(event: KeyboardEvent<HTMLButtonElement>) {
+		if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+		if (coverReady) {
 			event.preventDefault();
 			void goNext();
 		}
@@ -371,17 +410,16 @@ export default function Create() {
 	}
 
 	function answer(n: number) {
-		const latest = n === step - 1 && !done;
 		if (n === 1 && draft.goal !== null) {
 			return (
-				<Sent n={1} onEdit={goTo} delivered={latest}>
+				<Sent n={1} onEdit={goTo}>
 					<span className="text-lg font-bold">{formatGoal(draft.goal)}</span>
 				</Sent>
 			);
 		}
 		if (n === 2 && draft.coverUrl) {
 			return (
-				<div className="fly-sent flex flex-col items-end gap-1">
+				<div className="fly-sent flex justify-end">
 					<button
 						type="button"
 						className="block w-52 max-w-[70%] overflow-hidden rounded-3xl rounded-br-lg transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent md:w-60"
@@ -390,22 +428,19 @@ export default function Create() {
 					>
 						<CoverImage src={draft.coverUrl} alt="Your cover" className="w-full" />
 					</button>
-					{latest && (
-						<p className="pr-1 text-[0.7rem] font-semibold tracking-wide text-hint">Delivered</p>
-					)}
 				</div>
 			);
 		}
 		if (n === 3 && draft.title.trim()) {
 			return (
-				<Sent n={3} onEdit={goTo} delivered={latest}>
+				<Sent n={3} onEdit={goTo}>
 					<span className="text-lg font-bold wrap-break-word">{draft.title}</span>
 				</Sent>
 			);
 		}
 		if (n === 4 && draft.story.trim()) {
 			return (
-				<Sent n={4} onEdit={goTo} delivered={latest}>
+				<Sent n={4} onEdit={goTo}>
 					<span className="block whitespace-pre-wrap leading-relaxed wrap-break-word">{draft.story}</span>
 				</Sent>
 			);
@@ -521,7 +556,7 @@ export default function Create() {
 
 				{done && (
 					<>
-						<Sent n={LAST} delivered>
+						<Sent n={LAST}>
 							<span className="text-lg font-bold">Looks good</span>
 						</Sent>
 						{!typing && (
@@ -588,6 +623,14 @@ export default function Create() {
 							key={step}
 							className={`flex flex-col gap-3 ${typing ? 'opacity-60' : 'fly-compose'}`}
 							onSubmit={(event) => {
+								event.preventDefault();
+								void goNext();
+							}}
+							onKeyDown={(event) => {
+								if (step !== 2 || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+								if (!coverReady) return;
+								const target = event.target as HTMLElement;
+								if (target.closest('button:not(.send-btn):not([data-photo-prompt])')) return;
 								event.preventDefault();
 								void goNext();
 							}}
@@ -681,14 +724,12 @@ export default function Create() {
 								) : step === 2 ? (
 									<button
 										type="button"
+										data-photo-prompt
 										className="flex min-h-10 min-w-0 flex-1 items-center pl-1 text-left text-base text-hint"
 										onClick={() => coverField.current?.openPicker()}
+										onKeyDown={onPhotoPromptKeydown}
 									>
-										{coverCropping
-											? 'Drag the photo to reposition it'
-											: coverReady
-												? 'Photo attached'
-												: 'Add a cover photo…'}
+										{coverReady || coverCropping ? 'Click to change ...' : 'Click to add ...'}
 									</button>
 								) : step === 3 ? (
 									<label className="flex min-h-10 min-w-0 flex-1 items-center pl-2">
@@ -700,8 +741,8 @@ export default function Create() {
 											maxLength={80}
 											placeholder="Help Maya get home"
 											value={draft.title}
-											onChange={(event) => patchDraft({ title: event.currentTarget.value })}
-											onKeyDown={onEnter}
+											onChange={onTitleInput}
+											onKeyDown={onTitleKeydown}
 											disabled={typing}
 										/>
 									</label>
@@ -722,7 +763,7 @@ export default function Create() {
 									</label>
 								)}
 
-								<SendButton disabled={!canContinue || busy} />
+								<SendButton buttonRef={sendRef} disabled={!canContinue || busy} />
 							</div>
 
 							<div className="flex min-h-4 items-center justify-between gap-3 px-2 text-xs font-medium text-hint">
