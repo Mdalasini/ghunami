@@ -49,6 +49,8 @@ const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
 const TYPING_MS = 450;
 /* A beat between your message landing and the typing bubble, so they read as two events. */
 const REPLY_GAP_MS = 120;
+/* A sent cover waits for the tray to shrink away before landing (`.sent-late` in index.css). */
+const COVER_LAND_MS = 220;
 const SKIP_COVER_MESSAGE = 'I’ll return to this later';
 /* Long enough to cover the reveal transitions above plus the composer swap. */
 const PIN_MS = 420;
@@ -428,11 +430,11 @@ export default function Create() {
 		setSnapshot(null);
 	}
 
-	async function reply(next: () => void) {
+	async function reply(next: () => void, gapMs = REPLY_GAP_MS) {
 		const id = ++replyId.current;
 		setSending(true);
 		next();
-		await sleep(REPLY_GAP_MS);
+		await sleep(gapMs);
 		if (replyId.current !== id) return;
 		setTyping(true);
 		await sleep(TYPING_MS);
@@ -459,7 +461,7 @@ export default function Create() {
 			return;
 		}
 		const from = step;
-		await reply(() => setStep(from + 1));
+		await reply(() => setStep(from + 1), from === 2 ? COVER_LAND_MS + REPLY_GAP_MS : REPLY_GAP_MS);
 	}
 
 	async function skipCover() {
