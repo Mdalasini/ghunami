@@ -377,7 +377,7 @@ export function CoverPhotoField({
 					<div
 						className="attachment-tray relative overflow-hidden rounded-3xl border-2 border-line bg-card shadow-[0_-8px_32px_-12px_rgba(15,26,18,0.25)]"
 						style={showViewport ? {
-							width: 'min(100%, 28rem, max(11rem, calc(70dvh - 220px)))',
+							width: 'min(100%, 24rem, max(11rem, calc(62dvh - 220px)))',
 							marginInline: 'auto'
 						} : undefined}
 						role="presentation"
@@ -477,7 +477,7 @@ export function CoverPhotoField({
 									)}
 								</div>
 								{/* Fixed height whether or not the slider is shown, so the card never jumps. */}
-								<div className="flex min-h-[5.75rem] flex-col justify-center gap-2 px-5 py-3">
+								<div className="flex min-h-[5.25rem] flex-col justify-center gap-2 px-5 py-3">
 									{pending && canZoom && (
 										<label className="flex items-center gap-3">
 											<span className="text-xs font-extrabold tracking-wider text-mute uppercase">
