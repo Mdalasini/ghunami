@@ -101,6 +101,7 @@ export default function Create() {
 	);
 	const [coverReady, setCoverReady] = useState(() => getDraft().coverUrl !== '');
 	const [coverBusy, setCoverBusy] = useState(false);
+	const [coverCropping, setCoverCropping] = useState(false);
 	const coverField = useRef<CoverPhotoFieldHandle>(null);
 
 	const currentStep = STEPS[step - 1];
@@ -182,6 +183,7 @@ export default function Create() {
 		setGoalText('');
 		setCoverReady(false);
 		setCoverBusy(false);
+		setCoverCropping(false);
 		setDone(false);
 		setSending(false);
 		setShownThrough(0);
@@ -302,7 +304,7 @@ export default function Create() {
 							<p className="mt-2 text-base text-mute md:text-lg">{sub}</p>
 						</div>
 					</div>
-					{!done && step === 2 && (
+					{!done && step === 2 && !coverCropping && (
 						<Tip title="Choosing a photo">
 							<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
 						</Tip>
@@ -410,6 +412,7 @@ export default function Create() {
 							ref={coverField}
 							coverUrl={draft.coverUrl}
 							onReadyChange={setCoverReady}
+							onCroppingChange={setCoverCropping}
 						/>
 					) : step === 3 ? (
 						<label className="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent">

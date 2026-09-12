@@ -36,12 +36,15 @@ export type CoverPhotoFieldHandle = {
 export function CoverPhotoField({
 	coverUrl,
 	ref,
-	onReadyChange
+	onReadyChange,
+	onCroppingChange
 }: {
 	coverUrl: string;
 	ref?: Ref<CoverPhotoFieldHandle>;
 	onReadyChange: (ready: boolean) => void;
+	onCroppingChange?: (cropping: boolean) => void;
 }) {
+	const cropCard = useRef<HTMLDivElement>(null);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const decodedRef = useRef<DecodedCover | null>(null);
 	const cropPercentRef = useRef<Area | null>(null);
@@ -62,6 +65,13 @@ export function CoverPhotoField({
 	useEffect(() => {
 		setClient(true);
 	}, []);
+
+	useEffect(() => {
+		onCroppingChange?.(Boolean(pending));
+		return () => {
+			onCroppingChange?.(false);
+		};
+	}, [pending, onCroppingChange]);
 
 	useEffect(() => {
 		return () => {
@@ -123,6 +133,9 @@ export function CoverPhotoField({
 			replacePending(decoded);
 			setFileName(file.name);
 			setWarning('');
+			requestAnimationFrame(() => {
+				cropCard.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+			});
 		} catch (caught) {
 			if (loadId !== loadIdRef.current) return;
 			replacePending(null);
@@ -225,6 +238,7 @@ export function CoverPhotoField({
 				onChange={onFileChange}
 			/>
 			<div
+				ref={cropCard}
 				className={`compose-card ml-15 overflow-hidden rounded-3xl rounded-tr-lg border-2 bg-card transition-colors duration-150 ${
 					dragging ? 'border-accent' : 'border-line'
 				}`}
@@ -238,7 +252,7 @@ export function CoverPhotoField({
 			>
 				{showCropper && pending ? (
 					<div className="relative">
-						<div className="relative h-[22rem] w-full bg-ink">
+						<div className="relative h-64 w-full bg-ink md:h-72">
 							{client ? (
 								<Suspense
 									fallback={
@@ -300,25 +314,7 @@ export function CoverPhotoField({
 									</p>
 								</div>
 							)}
-						</div>
-						<label className="flex items-center gap-3 px-5 py-3">
-							<span className="text-xs font-extrabold tracking-wider text-mute uppercase">
-								Zoom
-							</span>
-							<input
-								type="range"
-								min={1}
-								max={4}
-								step={0.01}
-								value={zoom}
-								onChange={(event) => setZoom(Number(event.currentTarget.value))}
-								className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-accent)]"
-								aria-label="Zoom photo"
-							/>
-						</label>
-						<div className="flex items-center justify-between gap-3 px-5 pb-4">
-							<p className="text-sm text-mute">{helper}</p>
-							<div className="flex gap-2">
+							<div className="absolute top-3 right-3 z-10 flex gap-2">
 								{coverUrl ? (
 									<button
 										type="button"
@@ -337,6 +333,25 @@ export function CoverPhotoField({
 								</button>
 							</div>
 						</div>
+						<label className="flex items-center gap-3 px-5 py-3">
+							<span className="text-xs font-extrabold tracking-wider text-mute uppercase">
+								Zoom
+							</span>
+							<input
+								type="range"
+								min={1}
+								max={4}
+								step={0.01}
+								value={zoom}
+								onChange={(event) => setZoom(Number(event.currentTarget.value))}
+								className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-accent)]"
+								aria-label="Zoom photo"
+								aria-describedby="cover-crop-help"
+							/>
+						</label>
+						<p id="cover-crop-help" className="px-5 pb-3 text-sm text-mute">
+							{helper}
+						</p>
 					</div>
 				) : coverUrl ? (
 					<div className="relative">
