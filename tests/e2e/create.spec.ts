@@ -104,10 +104,41 @@ test('blocks a cover crop below 540×675 and warns when the crop is a little sof
 	await page.locator('input[type="file"]').setInputFiles(tinyCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveText(/too small/i);
+		await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeDisabled();
 	await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
 
 	await page.locator('input[type="file"]').setInputFiles(softCover);
 	await expect(page.getByRole('status')).toHaveText(/a little soft/i);
+		await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Continue' }).click();
+	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+});
+
+test('shows only the saved frame and clamps zoom before quality degrades', async ({ page }) => {
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Continue' }).click();
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	const slider = page.getByRole('slider', { name: 'Zoom photo' });
+	await expect(slider).toBeEnabled();
+	await slider.focus();
+	await slider.press('End');
+	const maximum = await slider.getAttribute('max');
+	await expect(slider).toHaveValue(maximum!);
+	const viewport = page.locator('.cover-crop-container');
+	const frame = page.locator('.cover-crop-area');
+	const bounds = await viewport.boundingBox();
+	const cropBounds = await frame.boundingBox();
+	expect(bounds).not.toBeNull();
+	expect(cropBounds).not.toBeNull();
+	expect(Math.abs(bounds!.width - cropBounds!.width)).toBeLessThanOrEqual(1);
+	expect(Math.abs(bounds!.height - cropBounds!.height)).toBeLessThanOrEqual(1);
+	await viewport.hover();
+	await page.mouse.wheel(0, -2000);
+	await expect(slider).toHaveValue(maximum!);
+	await expect(page.getByRole('alert')).toHaveCount(0);
+	await expect(page.getByRole('status')).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
 	await page.getByRole('button', { name: 'Continue' }).click();
 	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();

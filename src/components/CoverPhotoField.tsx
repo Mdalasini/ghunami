@@ -18,6 +18,7 @@ import {
 	assessCropResolution,
 	decodeCoverImage,
 	percentCropToPixels,
+	maxCoverZoom,
 	processCoverCrop,
 	releaseDecodedCover,
 	validateCoverFile,
@@ -46,6 +47,8 @@ export function CoverPhotoField({
 }) {
 	const cropCard = useRef<HTMLDivElement>(null);
 	const fileInput = useRef<HTMLInputElement>(null);
+	const cropViewport = useRef<HTMLDivElement>(null);
+	const [cropSize, setCropSize] = useState<{ width: number; height: number }>();
 	const decodedRef = useRef<DecodedCover | null>(null);
 	const cropPercentRef = useRef<Area | null>(null);
 	const confirmRef = useRef<() => Promise<boolean>>(async () => false);
@@ -61,6 +64,20 @@ export function CoverPhotoField({
 	const [warning, setWarning] = useState('');
 	const [reading, setReading] = useState(false);
 	const [processing, setProcessing] = useState(false);
+	const maxZoom = pending ? maxCoverZoom(pending.width, pending.height) : 1;
+	const changeZoom = (value: number) => setZoom(Math.max(1, Math.min(maxZoom, value)));
+
+	useEffect(() => {
+		const viewport = cropViewport.current;
+		if (!viewport) return;
+		const measure = () => {
+			setCropSize({ width: viewport.clientWidth, height: viewport.clientHeight });
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(viewport);
+		return () => observer.disconnect();
+	}, [pending]);
 
 	useEffect(() => {
 		setClient(true);
@@ -227,7 +244,7 @@ export function CoverPhotoField({
 
 	const showCropper = Boolean(pending);
 	const helper = showCropper
-		? 'Drag to reposition · pinch or scroll to zoom'
+		? 'Drag to reposition · zoom is limited to preserve photo quality'
 		: 'or drop one here · JPG, PNG, HEIC, WebP · up to 25 MB';
 
 	return (
@@ -254,14 +271,18 @@ export function CoverPhotoField({
 			>
 				{showCropper && pending ? (
 					<div className="relative">
-						<div className="relative h-64 w-full bg-ink md:h-72">
-							{client ? (
+						<div
+							ref={cropViewport}
+							className="relative w-full overflow-hidden bg-ink"
+							style={{ aspectRatio: COVER_ASPECT }}
+												>
+							{client && cropSize ? (
 								<Suspense
 									fallback={
 										<img
 											src={pending.previewUrl}
 											alt="Photo to crop"
-											className="h-full w-full object-contain"
+											className="h-full w-full object-cover"
 										/>
 									}
 								>
@@ -271,15 +292,16 @@ export function CoverPhotoField({
 										zoom={zoom}
 										rotation={0}
 										minZoom={1}
-										maxZoom={4}
+										maxZoom={maxZoom}
+																				cropSize={cropSize}
 										aspect={COVER_ASPECT}
 										cropShape="rect"
 										zoomSpeed={1}
 										keyboardStep={1}
 										onCropChange={setCrop}
-										onZoomChange={setZoom}
+										onZoomChange={changeZoom}
 										onCropComplete={onCropComplete}
-										objectFit="contain"
+										objectFit="cover"
 										showGrid={false}
 										zoomWithScroll
 										restrictPosition
@@ -296,8 +318,8 @@ export function CoverPhotoField({
 										style={{
 											containerStyle: { background: 'var(--color-ink)' },
 											cropAreaStyle: {
-												border: '2px solid var(--color-card)',
-												borderRadius: '16px'
+												border: 'none',
+												boxShadow: 'none'
 											}
 										}}
 									/>
@@ -306,7 +328,7 @@ export function CoverPhotoField({
 								<img
 									src={pending.previewUrl}
 									alt="Photo to crop"
-									className="h-full w-full object-contain"
+									className="h-full w-full object-cover"
 								/>
 							)}
 							{(reading || processing) && (
@@ -342,10 +364,11 @@ export function CoverPhotoField({
 							<input
 								type="range"
 								min={1}
-								max={4}
+								max={maxZoom}
+																disabled={maxZoom === 1}
 								step={0.01}
 								value={zoom}
-								onChange={(event) => setZoom(Number(event.currentTarget.value))}
+								onChange={(event) => changeZoom(Number(event.currentTarget.value))}
 								className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-accent)]"
 								aria-label="Zoom photo"
 								aria-describedby="cover-crop-help"

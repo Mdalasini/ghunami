@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	assessCropResolution,
+	maxCoverZoom,
+	COVER_ASPECT,
 	bitmapFromCoverFile,
 	clampPixelCrop,
 	COVER_MESSAGES,
@@ -70,6 +72,21 @@ describe('cover image validation', () => {
 });
 
 describe('crop resolution', () => {
+	it.each([[720, 900], [1080, 1350], [4000, 2000], [800, 2200], [12000, 16000]])(
+		'keeps the maximum zoom sharp for a %i×%i original',
+		(width, height) => {
+			const zoom = maxCoverZoom(width, height);
+			const cropWidth = Math.min(width, height * COVER_ASPECT) / zoom;
+			expect(zoom).toBeGreaterThanOrEqual(1);
+			expect(zoom).toBeLessThanOrEqual(4);
+			expect(assessCropResolution(Math.round(cropWidth), Math.round(cropWidth / COVER_ASPECT))).toBe('ok');
+		}
+	);
+
+	it.each([[600, 750], [200, 250], [4000, 674], [719, 900]])(
+		'disables zoom for a low-resolution %i×%i original',
+		(width, height) => expect(maxCoverZoom(width, height)).toBe(1)
+	);
 	it('treats 720×900 and above as sharp', () => {
 		expect(assessCropResolution(720, 900)).toBe('ok');
 		expect(assessCropResolution(1080, 1350)).toBe('ok');

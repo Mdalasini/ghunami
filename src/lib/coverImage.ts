@@ -16,7 +16,7 @@ export const COVER_MESSAGES = {
 	notImage: 'That isn’t an image. Use a JPG, PNG, HEIC, or WebP.',
 	tooLarge: 'That photo is over 25 MB. Pick a smaller one.',
 	tooSmall:
-		'This crop is too small. Choose a different photo, or zoom out to include more of the image.',
+		'This photo is too small for a cover. Choose a larger photo.',
 	soft: 'This photo may look a little soft at full size.',
 	unreadable: 'We couldn’t read that photo. Try a JPG, PNG, or WebP instead.',
 	encodeFailed: 'We couldn’t prepare that photo. Try another one.'
@@ -87,6 +87,14 @@ export function assessCropResolution(width: number, height: number): CropQuality
 	if (width < MIN_CROP_WIDTH || height < MIN_CROP_HEIGHT) return 'too_small';
 	if (width < SHARP_CROP_WIDTH || height < SHARP_CROP_HEIGHT) return 'soft';
 	return 'ok';
+}
+
+export function maxCoverZoom(width: number, height: number): number {
+	const cropWidth = Math.min(width, height * COVER_ASPECT);
+	const cropHeight = cropWidth / COVER_ASPECT;
+	// Keep low-resolution originals at their widest crop; never introduce a quality warning by zooming.
+	const limit = Math.min(4, cropWidth / SHARP_CROP_WIDTH, cropHeight / SHARP_CROP_HEIGHT);
+		return Math.max(1, Math.floor(limit * 100) / 100);
 }
 
 export function clampPixelCrop(
