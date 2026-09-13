@@ -13,7 +13,7 @@ export function AuthShell({
 	children
 }: {
 	title: string;
-	sub: string;
+	sub?: string;
 	children: ReactNode;
 }) {
 	return (
@@ -45,7 +45,7 @@ export function AuthShell({
 					<h1 className="font-display mt-5 text-3xl font-extrabold tracking-tight md:text-4xl">
 						{title}
 					</h1>
-					<p className="mt-2 text-base text-mute">{sub}</p>
+					{sub && <p className="mt-2 text-base text-mute">{sub}</p>}
 				</div>
 
 				<div className="mt-8 flex flex-col gap-3">{children}</div>
