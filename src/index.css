@@ -140,11 +140,6 @@ textarea {
 	animation: fly-in-sent 320ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
-/* The cover lands a beat late so the tray has gone before the bubble rises where it was. Mirrored by COVER_LAND_MS. */
-.grow-in.sent-late,
-.sent-late .fly-sent {
-	animation-delay: 220ms;
-}
 
 /*
  * The composer is one persistent bar. Only its contents change between steps: the field fades in
@@ -213,6 +208,7 @@ textarea {
 	visibility: hidden;
 	pointer-events: none;
 	will-change: transform, opacity;
+	transform-origin: bottom center;
 	transition:
 		transform 320ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
 		opacity 180ms ease-in 140ms,
@@ -231,17 +227,16 @@ textarea {
 }
 
 /*
- * Sending: instead of lowering, the tray shrinks toward the corner the bubble rises from and is
- * gone before the bubble appears. Mirrored by TRAY_SENT_MS in CoverPhotoField.
+ * Sending: gently slide and fade before the bubble appears. Mirrored by TRAY_SENT_MS.
+ * Do not scale this tray: the cropper measures its container while reopening to restore the crop.
  */
 .cover-tray.is-sent {
-	transform-origin: bottom right;
-	transform: translateY(12px) scale(0.92);
+	transform: translateY(8px);
 	opacity: 0;
 	transition:
-		transform 200ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
-		opacity 120ms ease-in,
-		visibility 0s linear 200ms;
+		transform 300ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 300ms ease-in-out,
+		visibility 0s linear 300ms;
 }
 
 /* `.grow-in` plays once on mount: content grows from 0 so everything above slides up instead of jumping. */
@@ -273,6 +268,28 @@ textarea {
 
 .grow-in > * {
 	min-height: 0;
+}
+
+/* Large photos need less travel than text bubbles; keep the layout and reveal in step. */
+@keyframes cover-message-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.grow-in.cover-message {
+	animation:
+		grow-rows 420ms cubic-bezier(0.22, 1, 0.36, 1) both,
+		unclip 0s linear 420ms both;
+}
+
+.cover-message-in {
+	animation: cover-message-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* The question shrinks into the thread once it has been answered. */

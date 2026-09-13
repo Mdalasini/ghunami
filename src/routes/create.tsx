@@ -49,8 +49,8 @@ const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
 const TYPING_MS = 450;
 /* A beat between your message landing and the typing bubble, so they read as two events. */
 const REPLY_GAP_MS = 120;
-/* A sent cover waits for the tray to shrink away before landing (`.sent-late` in index.css). */
-const COVER_LAND_MS = 220;
+/* Let the cover finish its entrance before the next typing bubble arrives. */
+const COVER_LAND_MS = 420;
 const SKIP_COVER_MESSAGE = 'I’ll return to this later';
 /* Long enough to cover the reveal transitions above plus the composer swap. */
 const PIN_MS = 420;
@@ -561,8 +561,8 @@ export default function Create() {
 		}
 		if (n === 2 && shown.coverUrl) {
 			return (
-				<div className="grow-in sent-late">
-					<div className="fly-sent flex justify-end">
+				<div className="grow-in cover-message">
+					<div key={shown.coverUrl} className="cover-message-in flex justify-end">
 						<button
 							type="button"
 							data-answer={2}

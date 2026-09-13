@@ -35,7 +35,7 @@ const Cropper = lazy(() => import('react-easy-crop'));
 
 /* Match the `.cover-tray` close transitions in index.css: lowering out of view, or shrinking away when sent. */
 const TRAY_CLOSE_MS = 320;
-const TRAY_SENT_MS = 200;
+const TRAY_SENT_MS = 300;
 
 type Closing = 'lower' | 'sent' | null;
 
@@ -91,7 +91,7 @@ export function CoverPhotoField({
 	const [closing, setClosing] = useState<Closing>(null);
 	const closeTimer = useRef(0);
 	const onClosedRef = useRef<(() => void) | null>(null);
-	/* Set by a successful confirm, so deactivating right after reads as "sent" rather than "left". */
+	/* Keep a confirmed tray closed until the caller leaves the cover step. */
 	const sentRef = useRef(false);
 
 	/*
@@ -187,7 +187,9 @@ export function CoverPhotoField({
 		window.clearTimeout(closeTimer.current);
 		closeTimer.current = window.setTimeout(
 			settleClose,
-			how === 'sent' ? TRAY_SENT_MS : TRAY_CLOSE_MS
+			window.matchMedia('(prefers-reduced-motion: reduce)').matches
+				? 0
+				: (how === 'sent' ? TRAY_SENT_MS : TRAY_CLOSE_MS) + 100
 		);
 	}
 
@@ -196,14 +198,16 @@ export function CoverPhotoField({
 		window.clearTimeout(closeTimer.current);
 		const queued = onClosedRef.current;
 		onClosedRef.current = null;
+		// Do not restart the lowering transition between the exit and the chat update.
+		setClosing((current) => current === 'sent' ? current : null);
 		queued?.();
-		setClosing(null);
 	}
 
 	async function acceptFile(file: File | undefined, savedCrop?: Area) {
 		if (!file) return;
 
 		settleClose();
+		setClosing(null);
 		const loadId = loadIdRef.current + 1;
 		loadIdRef.current = loadId;
 		setError('');
@@ -272,15 +276,18 @@ export function CoverPhotoField({
 	}
 
 	/*
-	 * Encode the crop into the draft. The photo stays on screen: the caller moves the thread on,
-	 * which deactivates the field and lowers the tray over the new message.
+	 * Prepare the image before closing the tray, then let the caller reveal it in the thread.
+	 * Keeping these phases in order also handles edits, where the answer is already mounted.
 	 */
 	async function confirm() {
 		if (processing || reading || closing) return false;
 		const decoded = decodedRef.current;
 		const cropPercent = cropPercentRef.current;
 		if (!decoded || !cropPercent) {
-			return coverUrl !== '';
+			if (!coverUrl) return false;
+			sentRef.current = true;
+			await new Promise<void>((resolve) => closeThen(resolve, 'sent'));
+			return true;
 		}
 
 		const pixels = percentCropToPixels(cropPercent, decoded.width, decoded.height);
@@ -294,12 +301,17 @@ export function CoverPhotoField({
 		setProcessing(true);
 		try {
 			const file = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
+
 			setCover(file, originalRef.current ? {
 				original: originalRef.current,
 				crop: cropPercent
 			} : undefined);
+			const image = new Image();
+			image.src = getDraft().coverUrl;
+			await image.decode();
 			setError('');
 			sentRef.current = true;
+			await new Promise<void>((resolve) => closeThen(resolve, 'sent'));
 			return true;
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : COVER_MESSAGES.encodeFailed);
@@ -344,13 +356,18 @@ export function CoverPhotoField({
 	useEffect(() => {
 		if (active) {
 			sentRef.current = false;
+			setClosing(null);
 			return;
 		}
 		const sent = sentRef.current;
 		sentRef.current = false;
 		onClosedRef.current = null;
+		if (sent) {
+			dropPending();
+			return;
+		}
 		if (!decodedRef.current && !reading) return;
-		closeThen(dropPending, sent ? 'sent' : 'lower');
+		closeThen(dropPending);
 	}, [active]);
 
 	confirmRef.current = confirm;
@@ -364,7 +381,7 @@ export function CoverPhotoField({
 	const showCropper = Boolean(pending);
 	const showViewport = showCropper || reading;
 	const hasAttachment = showCropper || coverUrl !== '';
-	const open = active && (hasAttachment || reading) && closing === null;
+	const open = active && !sentRef.current && (hasAttachment || reading) && closing === null;
 	const helper = canZoom ? 'Drag to reposition · zoom is limited to preserve photo quality' : 'Drag to reposition';
 	const message = error || warning;
 
@@ -377,8 +394,13 @@ export function CoverPhotoField({
 				accept={COVER_ACCEPT}
 				onChange={onFileChange}
 			/>
-			<div className="cover-tray-dock" aria-hidden={!open}>
+			<div className="cover-tray-dock" aria-hidden={!open} inert={!open || processing}>
 				<div
+					onTransitionEnd={(event) => {
+						if (event.target === event.currentTarget && event.propertyName === 'transform' && closing) {
+							settleClose();
+						}
+					}}
 					className={`cover-tray mx-auto w-full max-w-[40rem] px-4 ${
 						open ? 'is-raised' : closing === 'sent' ? 'is-sent' : ''
 					}`}
@@ -391,10 +413,11 @@ export function CoverPhotoField({
 						} : undefined}
 						role="presentation"
 					>
-						{hasAttachment && !processing && (
+						{hasAttachment && (
 							<button
 								type="button"
 								className="absolute top-3 right-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-card/95 text-ink shadow-md transition-colors hover:bg-card hover:text-error"
+								disabled={processing || !open}
 								onClick={clear}
 								aria-label="Remove photo"
 								tabIndex={open ? 0 : -1}
@@ -477,10 +500,10 @@ export function CoverPhotoField({
 											className="h-full w-full object-cover"
 										/>
 									) : null}
-									{(reading || processing) && (
+									{reading && (
 										<div className="absolute inset-0 z-10 flex items-center justify-center bg-card/80">
 											<p className="text-sm font-extrabold tracking-wider text-mute uppercase">
-												{processing ? 'Preparing photo' : 'Reading photo'}
+												Reading photo
 											</p>
 										</div>
 									)}
@@ -494,6 +517,7 @@ export function CoverPhotoField({
 											</span>
 											<input
 												type="range"
+												disabled={processing}
 												min={0}
 												max={100}
 												step={0.5}
@@ -519,7 +543,7 @@ export function CoverPhotoField({
 										</p>
 									) : (
 										<p id="cover-crop-help" className="text-sm text-mute">
-											{pending ? helper : 'Reading photo'}
+											{processing ? 'Preparing photo…' : pending ? helper : 'Reading photo'}
 										</p>
 									)}
 								</div>
