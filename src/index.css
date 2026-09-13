@@ -89,23 +89,13 @@ textarea {
 	cursor: not-allowed;
 }
 
-:focus-visible:not(input):not(textarea):not(select) {
+/* The compose bubble carries focus for its bare fields, including the story editor. */
+:focus-visible:not(input):not(textarea):not(select):not(.rich-editor) {
 	outline: 3px solid var(--color-accent);
 	outline-offset: 3px;
 }
 
 @keyframes fly-in {
-	from {
-		opacity: 0;
-		transform: translateY(24px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-@keyframes fly-in-sent {
 	from {
 		opacity: 0;
 		transform: translateY(16px);
@@ -116,64 +106,219 @@ textarea {
 	}
 }
 
-@keyframes fly-out {
+/* Sent bubbles lift out of the composer, like a message leaving the field. */
+@keyframes fly-in-sent {
 	from {
-		opacity: 1;
-		transform: translateY(0);
+		opacity: 0;
+		transform: translateY(28px) scale(0.92);
 	}
 	to {
-		opacity: 0;
-		transform: translateY(-32px);
+		opacity: 1;
+		transform: translateY(0) scale(1);
 	}
 }
 
-.fly-question {
-	animation: fly-in 360ms cubic-bezier(0.215, 0.61, 0.355, 1) 440ms both;
+/* Received bubbles grow from their tail corner. */
+@keyframes bubble-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.94);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
 }
 
-.fly-compose {
-	animation: fly-in 360ms cubic-bezier(0.215, 0.61, 0.355, 1) 620ms both;
+.bubble-in {
+	transform-origin: bottom left;
+	animation: bubble-in 260ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
 .fly-sent {
-	animation: fly-in-sent 280ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+	transform-origin: bottom right;
+	animation: fly-in-sent 320ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
-.sending-draft {
-	animation: fly-out 220ms cubic-bezier(0.215, 0.61, 0.355, 1) 160ms both;
+/* The cover lands a beat late so the tray has gone before the bubble rises where it was. Mirrored by COVER_LAND_MS. */
+.grow-in.sent-late,
+.sent-late .fly-sent {
+	animation-delay: 220ms;
 }
 
-.goal-fit {
-	container-type: inline-size;
-}
-
-.goal-amount {
-	font-size: min(3.5rem, calc((100cqi - 8px) / 4.2));
-	line-height: 1;
-}
-
-@media (min-width: 768px) {
-	.goal-amount {
-		font-size: min(4rem, calc((100cqi - 8px) / 4.2));
+/*
+ * The composer is one persistent bar. Only its contents change between steps: the field fades in
+ * place, and the rows above it (suggestions, toolbar, edit header) unfold rather than mount.
+ */
+@keyframes field-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
 	}
 }
 
-.sending-draft .compose-card {
-	background-color: var(--color-accent);
-	border-color: var(--color-accent);
-	color: var(--color-card);
+.field-swap {
+	animation: field-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
-.sending-draft .compose-card input,
-.sending-draft .compose-card textarea,
-.sending-draft .compose-card .text-accent {
-	color: var(--color-card);
+.unfold {
+	display: grid;
+	grid-template-rows: 0fr;
+	opacity: 0;
+	transition:
+		grid-template-rows 260ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 180ms ease-out;
 }
 
-.sending-draft [role='group'] button {
-	background-color: var(--color-accent);
-	border-color: var(--color-accent-deep);
-	color: var(--color-card);
+.unfold.is-open {
+	grid-template-rows: 1fr;
+	opacity: 1;
+	transition:
+		grid-template-rows 260ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 200ms ease-out 60ms;
+}
+
+.unfold > * {
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* The second bubble in a received run lands a beat after the first, so they read as two messages. */
+.thread-group > .bubble-in + .bubble-in {
+	animation-delay: 160ms;
+}
+
+/*
+ * Photo tray. Anchored to the top edge of the composer and clipped there, so it rises from behind
+ * the composer over the thread and drops back down without moving anything in the thread. The
+ * duration is mirrored by TRAY_CLOSE_MS in CoverPhotoField.
+ */
+.cover-tray-dock {
+	position: absolute;
+	inset-inline: 0;
+	bottom: 100%;
+	overflow: hidden;
+	pointer-events: none;
+	padding-top: 0.75rem;
+	padding-bottom: 0.75rem;
+}
+
+.cover-tray {
+	transform: translateY(calc(100% + 0.75rem));
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	will-change: transform, opacity;
+	transition:
+		transform 320ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
+		opacity 180ms ease-in 140ms,
+		visibility 0s linear 320ms;
+}
+
+.cover-tray.is-raised {
+	transform: translateY(0);
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+	transition:
+		transform 360ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 200ms ease-out,
+		visibility 0s;
+}
+
+/*
+ * Sending: instead of lowering, the tray shrinks toward the corner the bubble rises from and is
+ * gone before the bubble appears. Mirrored by TRAY_SENT_MS in CoverPhotoField.
+ */
+.cover-tray.is-sent {
+	transform-origin: bottom right;
+	transform: translateY(12px) scale(0.92);
+	opacity: 0;
+	transition:
+		transform 200ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
+		opacity 120ms ease-in,
+		visibility 0s linear 200ms;
+}
+
+/* `.grow-in` plays once on mount: content grows from 0 so everything above slides up instead of jumping. */
+@keyframes grow-rows {
+	from {
+		grid-template-rows: 0fr;
+	}
+	to {
+		grid-template-rows: 1fr;
+	}
+}
+
+/* Clip only while growing; afterwards focus rings and shadows may overflow again. */
+@keyframes unclip {
+	from {
+		overflow: hidden;
+	}
+	to {
+		overflow: visible;
+	}
+}
+
+.grow-in {
+	display: grid;
+	animation:
+		grow-rows 280ms cubic-bezier(0.215, 0.61, 0.355, 1) both,
+		unclip 0s linear 280ms both;
+}
+
+.grow-in > * {
+	min-height: 0;
+}
+
+/* The question shrinks into the thread once it has been answered. */
+.question-text,
+.question-sub {
+	transition:
+		font-size 320ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		line-height 320ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+/* The last bubble in a received run carries the tail. */
+.thread-group > :last-child {
+	border-bottom-left-radius: 0.5rem;
+}
+
+@keyframes typing-dot {
+	0%,
+	60%,
+	100% {
+		opacity: 0.35;
+		transform: translateY(0);
+	}
+	30% {
+		opacity: 1;
+		transform: translateY(-3px);
+	}
+}
+
+.typing-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-mute);
+	animation: typing-dot 1.1s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+	animation-delay: 150ms;
+}
+
+.typing-dot:nth-child(3) {
+	animation-delay: 300ms;
+}
+
+.compose-bar textarea {
+	scrollbar-width: thin;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -251,6 +396,53 @@ textarea {
 	border-radius: 50%;
 	background: var(--color-accent);
 	animation: check-pip 1.3s ease-in-out infinite;
+}
+
+/* Story formatting, shared by the editor and the sent bubble. */
+.story-rich {
+	overflow-wrap: anywhere;
+}
+
+.story-rich h1 {
+	font-size: 1.375rem;
+	line-height: 1.2;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+}
+
+.story-rich h2 {
+	font-size: 1.125rem;
+	line-height: 1.3;
+	font-weight: 800;
+}
+
+.story-rich p,
+.story-rich h1,
+.story-rich h2 {
+	margin: 0;
+}
+
+.story-rich p + p,
+.story-rich * + h1,
+.story-rich * + h2,
+.story-rich h1 + *,
+.story-rich h2 + * {
+	margin-top: 0.35em;
+}
+
+.story-rich strong {
+	font-weight: 800;
+}
+
+.rich-editor {
+	min-height: 1.75rem;
+	white-space: pre-wrap;
+}
+
+.rich-editor:empty::before {
+	content: attr(data-placeholder);
+	color: var(--color-hint);
+	pointer-events: none;
 }
 
 .cover-crop-container {

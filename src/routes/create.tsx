@@ -1,7 +1,11 @@
 import {
 	type ChangeEvent,
+	type DragEvent,
 	type KeyboardEvent,
 	type ReactNode,
+	type RefObject,
+	useCallback,
+	useEffect,
 	useRef,
 	useState,
 	useSyncExternalStore
@@ -9,80 +13,188 @@ import {
 import { Link } from 'react-router';
 import { CoverImage } from '../components/CoverImage';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
+import {
+	PLAIN_FORMATS,
+	StoryEditor,
+	type StoryEditorHandle,
+	type StoryFormats,
+	StoryToolbar
+} from '../components/StoryEditor';
 import { HorizonMark, Tip } from '../components/Tip';
-import { formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
+import {
+	type CoverSnapshot,
+	clearCover,
+	formatGoal,
+	getDraft,
+	holdCover,
+	patchDraft,
+	releaseHeldCover,
+	resetDraft,
+	restoreHeldCover,
+	subscribeDraft
+} from '../lib/draft';
+import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
 
 const STEPS = [
-	{ q: 'How much do you want to raise?', sub: 'Pick a starting number. You can change it later.' },
-	{ q: 'Add a cover photo', sub: 'A clear photo of the person or place helps more than a logo.' },
-	{ q: 'What should we call it?', sub: 'Say who it’s for and the action, like “Help Maya get home”.' },
-	{ q: 'Tell people what happened', sub: 'Plain words. Who it’s for, and what the money does.' },
-	{ q: 'Does this look right?', sub: 'Tap anything to change it.' }
+	{ q: 'How much do you want to raise?', sub: 'Pick a starting number. You can change it later.', label: 'your goal' },
+	{ q: 'Add a cover photo', sub: 'A clear photo of the person or place helps more than a logo.', label: 'your cover photo' },
+	{ q: 'What should we call it?', sub: 'Say who it’s for and the action, like “Help Maya get home”.', label: 'the title' },
+	{ q: 'Tell people what happened', sub: 'Plain words. Who it’s for, and what the money does.', label: 'your story' },
+	{ q: 'Does this look right?', sub: 'Tap anything to change it.', label: 'your draft' }
 ] as const;
 
 const LAST = STEPS.length;
 const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
+/* Just long enough to read as a reply arriving, not as waiting on one. */
+const TYPING_MS = 450;
+/* A beat between your message landing and the typing bubble, so they read as two events. */
+const REPLY_GAP_MS = 120;
+/* A sent cover waits for the tray to shrink away before landing (`.sent-late` in index.css). */
+const COVER_LAND_MS = 220;
+const SKIP_COVER_MESSAGE = 'I’ll return to this later';
+/* Long enough to cover the reveal transitions above plus the composer swap. */
+const PIN_MS = 420;
+/* The photo tray takes this long to rise; check the edited bubble again once it has. */
+const TRAY_RAISE_MS = 380;
+/* Within this distance of the end, the thread is treated as scrolled to the bottom. */
+const AT_END_PX = 24;
+
+type EditSnapshot = { goal: number | null; title: string; story: string; cover: CoverSnapshot };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function Sent({ n, onEdit, children }: { n: number; onEdit: (n: number) => void; children: ReactNode }) {
+function Avatar() {
 	return (
-		<div className="fly-sent flex justify-end">
-			<button
-				type="button"
-				className="group max-w-[85%] rounded-3xl rounded-br-lg bg-accent px-5 py-3 text-left text-base font-medium text-card transition-colors hover:bg-accent-deep"
-				onClick={() => onEdit(n)}
-				aria-label={`Change your answer to step ${n}`}
-			>
-				<span className="flex items-center gap-3">
-					<span className="min-w-0">{children}</span>
-					<svg
-						viewBox="0 0 20 20"
-						className="h-4 w-4 shrink-0 text-card/70 transition-colors group-hover:text-card"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						aria-hidden="true"
-					>
-						<path d="M13.5 3.5l3 3L7 16H4v-3z" />
-					</svg>
-				</span>
-			</button>
+		<span
+			className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink text-card"
+			aria-hidden="true"
+		>
+			<HorizonMark className="h-4 w-auto" />
+		</span>
+	);
+}
+
+/* A run of received bubbles. The avatar sits at the bottom like a thread, and the last bubble gets the tail. */
+function Received({ children }: { children: ReactNode }) {
+	return (
+		<div className="flex items-end gap-2.5">
+			<Avatar />
+			<div className="thread-group flex min-w-0 max-w-[85%] flex-col items-start gap-1.5">{children}</div>
 		</div>
 	);
 }
 
-function ReceiptRow({
-	label,
+/* One element for both sizes so the shrink into the thread is a transition, not a swap. */
+function Question({ q, sub, current }: { q: string; sub: string; current: boolean }) {
+	return (
+		<div className="bubble-in min-w-0 rounded-3xl bg-card px-5 py-4">
+			<p
+				role={current ? 'heading' : undefined}
+				aria-level={current ? 1 : undefined}
+				className={`question-text font-extrabold text-balance ${
+					current
+						? 'text-2xl leading-[1.15] tracking-[-0.02em] md:text-3xl md:leading-[1.12]'
+						: 'text-lg leading-snug tracking-[-0.01em]'
+				}`}
+			>
+				{q}
+			</p>
+			<p className={`question-sub mt-1.5 text-mute ${current ? 'text-base md:text-lg' : 'text-sm'}`}>{sub}</p>
+		</div>
+	);
+}
+
+function Typing() {
+	return (
+		<div className="grow-in">
+			<Received>
+				<div className="bubble-in flex h-12 items-center gap-1.5 rounded-3xl bg-card px-5" aria-hidden="true">
+					<span className="typing-dot" />
+					<span className="typing-dot" />
+					<span className="typing-dot" />
+				</div>
+			</Received>
+		</div>
+	);
+}
+
+function Sent({
 	n,
-	done,
 	onEdit,
+	active = false,
 	children
 }: {
-	label: string;
 	n: number;
-	done: boolean;
-	onEdit: (n: number) => void;
+	onEdit?: (n: number) => void;
+	active?: boolean;
 	children: ReactNode;
 }) {
+	const bubble = 'max-w-[85%] rounded-3xl rounded-br-lg bg-accent px-5 py-3 text-left text-base font-medium text-card';
 	return (
-		<div className="flex items-start justify-between gap-4 py-4">
-			<div className="min-w-0 flex-1">
-				<p className="text-sm font-medium text-mute">{label}</p>
-				<div className="mt-1">{children}</div>
+		<div className="grow-in">
+			<div className="fly-sent flex justify-end">
+				{onEdit ? (
+					<button
+						type="button"
+						data-answer={n}
+						className={`${bubble} transition-[background-color,box-shadow,transform] duration-150 hover:bg-accent-deep active:scale-[0.97] ${
+							active ? 'bg-accent-deep ring-4 ring-accent/25' : ''
+						}`}
+						onClick={() => onEdit(n)}
+						aria-label={`Change your answer to step ${n}`}
+						aria-pressed={active}
+					>
+						{children}
+					</button>
+				) : (
+					<div className={bubble}>{children}</div>
+				)}
 			</div>
-			{!done && (
-				<button
-					type="button"
-					className="shrink-0 rounded-full border-2 border-line px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
-					onClick={() => onEdit(n)}
-				>
-					Edit
-				</button>
-			)}
 		</div>
+	);
+}
+
+/* A row above the composer that unfolds into place instead of mounting. Closed rows are inert. */
+function Unfold({ open, children }: { open: boolean; children: ReactNode }) {
+	return (
+		<div className={`unfold ${open ? 'is-open' : ''}`} inert={!open} aria-hidden={!open}>
+			<div>{children}</div>
+		</div>
+	);
+}
+
+function SendButton({
+	disabled,
+	label = 'Send',
+	buttonRef
+}: {
+	disabled: boolean;
+	label?: string;
+	buttonRef?: RefObject<HTMLButtonElement | null>;
+}) {
+	return (
+		<button
+			ref={buttonRef}
+			type="submit"
+			className={`send-btn inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-[background-color,transform] duration-150 ${
+				disabled ? 'bg-line text-mute' : 'bg-accent text-card hover:bg-accent-deep active:scale-95'
+			}`}
+			disabled={disabled}
+			aria-label={label}
+		>
+			<svg
+				viewBox="0 0 20 20"
+				className="h-5 w-5"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="2.6"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				aria-hidden="true"
+			>
+				<path d="M10 16V4M4.5 9.5 10 4l5.5 5.5" />
+			</svg>
+		</button>
 	);
 }
 
@@ -93,31 +205,160 @@ export function meta() {
 export default function Create() {
 	const draft = useSyncExternalStore(subscribeDraft, getDraft, getDraft);
 	const [step, setStep] = useState(1);
+	/* While set, the composer edits this earlier answer and then returns to `step`. */
+	const [editing, setEditing] = useState<number | null>(null);
 	const [done, setDone] = useState(false);
+	const [typing, setTyping] = useState(false);
 	const [sending, setSending] = useState(false);
-	const [shownThrough, setShownThrough] = useState(0);
 	const [goalText, setGoalText] = useState(() =>
 		draft.goal !== null ? draft.goal.toLocaleString('en-KE') : ''
 	);
 	const [coverReady, setCoverReady] = useState(() => getDraft().coverUrl !== '');
 	const [coverBusy, setCoverBusy] = useState(false);
 	const [coverCropping, setCoverCropping] = useState(false);
+	const [dragging, setDragging] = useState(false);
+	const [storyFormats, setStoryFormats] = useState<StoryFormats>(PLAIN_FORMATS);
+	/* What the edited answer looked like when the edit began; the bubble keeps showing this until Send. */
+	const [snapshot, setSnapshot] = useState<EditSnapshot | null>(null);
+	/* Kept after the edit ends so the header does not change words while it folds away. */
+	const [editLabel, setEditLabel] = useState('');
 	const coverField = useRef<CoverPhotoFieldHandle>(null);
+	const fieldRef = useRef<HTMLInputElement>(null);
+	const storyRef = useRef<StoryEditorHandle>(null);
+	const sendRef = useRef<HTMLButtonElement>(null);
+	const headerRef = useRef<HTMLElement>(null);
+	const footerRef = useRef<HTMLElement>(null);
+	const pinFrame = useRef(0);
+	const replyId = useRef(0);
+	/* Whether the reader was at the end of the thread the last time they scrolled (or were pinned there). */
+	const atEnd = useRef(true);
+	/* Mirrors `editing` for effects and observers that must not re-run when it changes. */
+	const editingRef = useRef<number | null>(null);
+	useEffect(() => {
+		editingRef.current = editing;
+	}, [editing]);
 
-	const currentStep = STEPS[step - 1];
-	if (!currentStep) {
+	const active = editing ?? step;
+	const activeStep = STEPS[active - 1];
+	if (!activeStep) {
 		throw new Error('Invalid create step');
 	}
 
-	const canContinue =
-		(step === 1 && draft.goal !== null && draft.goal > 0) ||
-		(step === 2 && coverReady) ||
-		(step === 3 && draft.title.trim().length > 0) ||
-		(step === 4 && draft.story.trim().length > 0) ||
-		step === LAST;
+	const storyChars = storyLength(draft.story);
 
-	const heading = done ? 'Saved in this browser' : currentStep.q;
-	const sub = done ? 'Nothing is public yet. This is your draft.' : currentStep.sub;
+	/*
+	 * Bubbles show the answers as sent. While one is being edited the composer holds the working
+	 * copy, so an emptied field or a removed photo never blanks the bubble mid-edit.
+	 */
+	const shown =
+		editing !== null && snapshot
+			? { ...draft, ...snapshot.cover, goal: snapshot.goal, title: snapshot.title, story: snapshot.story }
+			: draft;
+
+	const canContinue =
+		(active === 1 && draft.goal !== null && draft.goal > 0) ||
+		(active === 2 && coverReady) ||
+		(active === 3 && draft.title.trim().length > 0) ||
+		(active === 4 && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX) ||
+		active === LAST;
+
+	/* From your message landing until the reply has arrived; the composer waits it out. */
+	const replying = typing || sending;
+	const busy = replying || coverBusy;
+
+	/*
+	 * Keep the bottom of the thread glued to the viewport while heights animate. A single
+	 * smooth scroll fights the layout changes; following each frame for a moment does not.
+	 */
+	function pinToEnd(ms: number) {
+		cancelAnimationFrame(pinFrame.current);
+		atEnd.current = true;
+		const until = performance.now() + ms;
+		const tick = () => {
+			window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+			pinFrame.current = performance.now() < until ? requestAnimationFrame(tick) : 0;
+		};
+		pinFrame.current = requestAnimationFrame(tick);
+	}
+
+	/* New messages pull the thread down. Opening an edit is not a new message, so it must not. */
+	useEffect(() => {
+		if (editingRef.current !== null) return;
+		pinToEnd(PIN_MS);
+		return () => cancelAnimationFrame(pinFrame.current);
+	}, [step, typing, done]);
+
+	useEffect(() => {
+		const onScroll = () => {
+			if (pinFrame.current) return;
+			const doc = document.documentElement;
+			atEnd.current = doc.scrollHeight - (window.scrollY + window.innerHeight) <= AT_END_PX;
+		};
+		window.addEventListener('scroll', onScroll, { passive: true });
+		return () => window.removeEventListener('scroll', onScroll);
+	}, []);
+
+	/* Leaving mid-edit keeps whatever is in the draft; the held original must not outlive the route. */
+	useEffect(() => () => releaseHeldCover(), []);
+
+	/*
+	 * The composer grows (toolbar, long story, edit header). Someone reading at the end of the thread
+	 * should keep seeing the last message; someone scrolled up to an earlier answer should not be moved.
+	 */
+	useEffect(() => {
+		const footer = footerRef.current;
+		if (!footer) return;
+		const observer = new ResizeObserver(() => {
+			if (atEnd.current && editingRef.current === null) pinToEnd(PIN_MS);
+		});
+		observer.observe(footer);
+		return () => observer.disconnect();
+	}, []);
+
+	/* Scroll just enough that the bubble being edited is clear of the header, composer, and photo tray. */
+	function revealAnswer(n: number) {
+		const bubble = document.querySelector<HTMLElement>(`[data-answer="${n}"]`);
+		const header = headerRef.current;
+		const footer = footerRef.current;
+		if (!bubble || !header || !footer) return;
+		const rect = bubble.getBoundingClientRect();
+		const top = header.getBoundingClientRect().bottom + 16;
+		let bottom = footer.getBoundingClientRect().top - 16;
+		const tray = footer.querySelector('.cover-tray.is-raised');
+		if (tray) bottom = Math.min(bottom, tray.getBoundingClientRect().top - 16);
+		if (rect.bottom > bottom) {
+			window.scrollBy({ top: Math.min(rect.bottom - bottom, rect.top - top), behavior: 'smooth' });
+		} else if (rect.top < top) {
+			window.scrollBy({ top: rect.top - top, behavior: 'smooth' });
+		}
+	}
+
+	useEffect(() => {
+		if (editing === null) return;
+		cancelAnimationFrame(pinFrame.current);
+		pinFrame.current = 0;
+		const frame = requestAnimationFrame(() => revealAnswer(editing));
+		const later = window.setTimeout(() => revealAnswer(editing), TRAY_RAISE_MS);
+		return () => {
+			cancelAnimationFrame(frame);
+			window.clearTimeout(later);
+		};
+	}, [editing]);
+
+	useEffect(() => {
+		if (replying || done) return;
+		if (active === 2) {
+			if (coverReady) sendRef.current?.focus({ preventScroll: true });
+			return;
+		}
+		if (active === 4) {
+			storyRef.current?.focus();
+			return;
+		}
+		fieldRef.current?.focus({ preventScroll: true });
+	}, [active, replying, done, coverReady]);
+
+	const onStoryFormats = useCallback((formats: StoryFormats) => setStoryFormats(formats), []);
 
 	function parseGoal(value: string) {
 		const digits = value.replace(/[^\d]/g, '');
@@ -134,40 +375,104 @@ export default function Create() {
 	function pickSuggested(amount: number) {
 		patchDraft({ goal: amount });
 		setGoalText(amount.toLocaleString('en-KE'));
+		fieldRef.current?.focus({ preventScroll: true });
 	}
 
-	async function goTo(n: number) {
+	/* Rewind the thread to step n. Later answers are kept in the draft but must be sent again. */
+	function goTo(n: number) {
+		if (busy) return;
+		if (editing !== null) commitEdit();
 		setDone(false);
+		setTyping(false);
 		setSending(false);
-		setShownThrough(Math.max(0, n - 1));
 		setStep(n);
-		requestAnimationFrame(() => {
-			window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+	}
+
+	/* Change one earlier answer in place; the thread stays where it is. Any unsent edit is discarded first. */
+	function startEdit(n: number) {
+		if (busy || n >= step) return;
+		if (editing !== null) revertEdit(editing);
+		const current = getDraft();
+		setSnapshot({
+			goal: current.goal,
+			title: current.title,
+			story: current.story,
+			cover: holdCover()
 		});
+		setEditLabel(STEPS[n - 1]?.label ?? '');
+		setDone(false);
+		setEditing(n);
+	}
+
+	function revertEdit(n: number) {
+		if (!snapshot) return;
+		if (n === 1) {
+			patchDraft({ goal: snapshot.goal });
+			setGoalText(snapshot.goal !== null ? snapshot.goal.toLocaleString('en-KE') : '');
+		} else if (n === 3) {
+			patchDraft({ title: snapshot.title });
+		} else if (n === 4) {
+			patchDraft({ story: snapshot.story });
+		}
+		restoreHeldCover(snapshot.cover);
+	}
+
+	function cancelEdit() {
+		if (editing === null || busy) return;
+		revertEdit(editing);
+		setEditing(null);
+		setSnapshot(null);
+	}
+
+	function commitEdit() {
+		releaseHeldCover();
+		setEditing(null);
+		setSnapshot(null);
+	}
+
+	async function reply(next: () => void, gapMs = REPLY_GAP_MS) {
+		const id = ++replyId.current;
+		setSending(true);
+		next();
+		await sleep(gapMs);
+		if (replyId.current !== id) return;
+		setTyping(true);
+		await sleep(TYPING_MS);
+		// A newer reply or a jump via goTo owns the flags now; don't clear them from a stale reply.
+		if (replyId.current !== id) return;
+		setTyping(false);
+		setSending(false);
 	}
 
 	async function goNext() {
-		if (!canContinue || sending || coverBusy) return;
-		if (step === 2 && coverField.current) {
+		if (!canContinue || busy) return;
+		if (active === 2 && coverField.current) {
 			setCoverBusy(true);
 			const confirmed = await coverField.current.confirm();
 			setCoverBusy(false);
 			if (!confirmed) return;
 		}
-		if (step >= LAST) {
-			setDone(true);
+		if (editing !== null) {
+			commitEdit();
 			return;
 		}
-		setSending(true);
-		await sleep(160);
+		if (step >= LAST) {
+			await reply(() => setDone(true));
+			return;
+		}
 		const from = step;
-		setSending(false);
-		setStep(from + 1);
-		requestAnimationFrame(() => {
-			window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-		});
-		await sleep(220);
-		setShownThrough(from);
+		await reply(() => setStep(from + 1), from === 2 ? COVER_LAND_MS + REPLY_GAP_MS : REPLY_GAP_MS);
+	}
+
+	async function skipCover() {
+		if (busy || active !== 2) return;
+		clearCover();
+		patchDraft({ coverSkipped: true });
+		if (editing !== null) {
+			commitEdit();
+			return;
+		}
+		await reply(() => setStep(3));
 	}
 
 	function goBack() {
@@ -175,24 +480,38 @@ export default function Create() {
 			setDone(false);
 			return;
 		}
-		if (step > 1) void goTo(step - 1);
+		if (step > 1) goTo(step - 1);
 	}
 
 	function startOver() {
+		replyId.current += 1;
 		resetDraft();
 		setGoalText('');
 		setCoverReady(false);
 		setCoverBusy(false);
 		setCoverCropping(false);
+		setDragging(false);
 		setDone(false);
+		setEditing(null);
+		setSnapshot(null);
+		setTyping(false);
 		setSending(false);
-		setShownThrough(0);
 		setStep(1);
 	}
 
-	function onEnter(event: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) {
-		if (event.key === 'Enter') {
-			event.preventDefault();
+	function onEnter(event: KeyboardEvent<HTMLElement>) {
+		if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+		if (event.shiftKey) return;
+		event.preventDefault();
+		if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+			void goNext();
+		}
+	}
+
+	function onTitleKeydown(event: KeyboardEvent<HTMLInputElement>) {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
 			void goNext();
 		}
 	}
@@ -208,48 +527,152 @@ export default function Create() {
 		parseGoal(event.currentTarget.value);
 	}
 
-	function photoEdit(n: number) {
-		if (done) return null;
-		return (
-			<button
-				type="button"
-				className="absolute top-3 right-3 rounded-full border-2 border-line bg-card px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:border-accent"
-				onClick={() => void goTo(n)}
-			>
-				Edit
-			</button>
-		);
+	function onDrop(event: DragEvent<HTMLElement>) {
+		event.preventDefault();
+		setDragging(false);
+		if (active === 2) coverField.current?.addFile(event.dataTransfer.files[0]);
 	}
+
+	/* Enter anywhere in the composer or the photo tray sends the cover, except on other buttons. */
+	function onCoverKeydown(event: KeyboardEvent<HTMLElement>) {
+		if (active !== 2 || done || event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+		if (!coverReady) return;
+		const target = event.target as HTMLElement;
+		if (target.closest('button:not(.send-btn):not([data-photo-prompt])')) return;
+		event.preventDefault();
+		void goNext();
+	}
+
+	function tip(n: number) {
+		if (n === 2) {
+			return (
+				<Tip title="Choosing a photo">
+					<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
+				</Tip>
+			);
+		}
+		if (n === 3) {
+			return (
+				<Tip title="A good title">
+					<p>Mention who or what it’s for, and the action.</p>
+				</Tip>
+			);
+		}
+		if (n === 4) {
+			return (
+				<Tip title="What a good story covers">
+					<ol className="list-decimal space-y-1 pl-4 marker:font-bold marker:text-accent">
+						<li>Introduce yourself.</li>
+						<li>Say who or what you’re fundraising for.</li>
+						<li>Explain what happened.</li>
+						<li>Share how the money will be used.</li>
+					</ol>
+				</Tip>
+			);
+		}
+		return null;
+	}
+
+	function answer(n: number) {
+		const editingThis = editing === n;
+		if (n === 1 && shown.goal !== null) {
+			return (
+				<Sent n={1} onEdit={startEdit} active={editingThis}>
+					<span className="text-lg font-bold">{formatGoal(shown.goal)}</span>
+				</Sent>
+			);
+		}
+		if (n === 2 && shown.coverUrl) {
+			return (
+				<div className="grow-in sent-late">
+					<div className="fly-sent flex justify-end">
+						<button
+							type="button"
+							data-answer={2}
+							className={`block w-52 max-w-[70%] overflow-hidden rounded-3xl rounded-br-lg transition-[opacity,box-shadow,transform] duration-150 hover:opacity-90 active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent md:w-60 ${
+								editingThis ? 'ring-4 ring-accent/25' : ''
+							}`}
+							onClick={() => startEdit(2)}
+							aria-label="Change your answer to step 2"
+							aria-pressed={editingThis}
+						>
+							<CoverImage src={shown.coverUrl} alt="Your cover" className="w-full" />
+						</button>
+					</div>
+				</div>
+			);
+		}
+		if (n === 2 && shown.coverSkipped) {
+			return (
+				<Sent n={2} onEdit={startEdit} active={editingThis}>
+					<span className="text-base font-medium">{SKIP_COVER_MESSAGE}</span>
+				</Sent>
+			);
+		}
+		if (n === 3 && shown.title.trim()) {
+			return (
+				<Sent n={3} onEdit={startEdit} active={editingThis}>
+					<span className="text-lg font-bold wrap-break-word">{shown.title}</span>
+				</Sent>
+			);
+		}
+		if (n === 4 && !isStoryEmpty(shown.story)) {
+			return (
+				<Sent n={4} onEdit={startEdit} active={editingThis}>
+					<div className="story-rich leading-relaxed" dangerouslySetInnerHTML={{ __html: shown.story }} />
+				</Sent>
+			);
+		}
+		return null;
+	}
+
+	/* Every step up to the current one stays in the thread; the current step is shown once the typing bubble clears. */
+	const visibleSteps = STEPS.slice(0, replying && !done ? step - 1 : step);
+	const showSkip = active === 2 && !coverReady && !coverCropping && !replying;
 
 	return (
 		<div className="flex min-h-dvh flex-col">
-			<header className="sticky top-0 z-10 bg-paper">
-				<div className="mx-auto flex w-full max-w-[40rem] items-center gap-4 px-4 py-4 md:py-6">
-					<Link
-						to="/"
-						aria-label="Cancel and go home"
-						className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-mute transition-colors hover:bg-card hover:text-ink"
-					>
-						<svg
-							viewBox="0 0 16 16"
-							className="h-4 w-4"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="2.4"
-							strokeLinecap="round"
-							aria-hidden="true"
+			<header ref={headerRef} className="sticky top-0 z-10 bg-paper/95 backdrop-blur">
+				<div className="mx-auto flex w-full max-w-[40rem] flex-col gap-3 px-4 pt-3 pb-3">
+					<div className="grid grid-cols-[2.5rem_1fr_2.5rem] items-center">
+						<Link
+							to="/"
+							aria-label="Cancel and go home"
+							className="inline-flex h-10 w-10 items-center justify-center rounded-full text-mute transition-colors hover:bg-card hover:text-ink"
 						>
-							<path d="M3 3l10 10M13 3L3 13" />
-						</svg>
-					</Link>
+							<svg
+								viewBox="0 0 16 16"
+								className="h-4 w-4"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2.4"
+								strokeLinecap="round"
+								aria-hidden="true"
+							>
+								<path d="M3 3l10 10M13 3L3 13" />
+							</svg>
+						</Link>
+						<div className="flex flex-col items-center gap-1">
+							<span
+								className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink text-card"
+								aria-hidden="true"
+							>
+								<HorizonMark className="h-4 w-auto" />
+							</span>
+							<p className="text-sm font-extrabold">Ghunami</p>
+							<p className="text-xs font-medium text-mute" aria-live="polite">
+								{done ? 'Draft saved' : editing !== null ? `Editing ${activeStep.label}` : `Step ${step} of ${LAST}`}
+							</p>
+						</div>
+					</div>
 					<ol
-						className="flex flex-1 gap-1.5"
+						className="flex gap-1"
 						aria-label={`Progress: step ${done ? LAST : step} of ${LAST}`}
 					>
 						{STEPS.map((s, i) => (
 							<li
 								key={s.q}
-								className="h-4 flex-1 overflow-hidden rounded-full bg-line transition-colors duration-300"
+								className="h-1.5 flex-1 overflow-hidden rounded-full bg-line"
 								aria-current={!done && i + 1 === step ? 'step' : undefined}
 							>
 								<div
@@ -264,194 +687,73 @@ export default function Create() {
 				</div>
 			</header>
 
-			<main className="mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-end gap-5 px-4 pt-4 pb-32">
-				{!done && step < LAST && (
+			<main className="mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-end gap-4 px-4 pt-4 pb-4">
+				{visibleSteps.map((s, i) => {
+					const n = i + 1;
+					const current = n === step && !done;
+					return (
+						<div key={s.q} className="grow-in">
+							<div className="flex flex-col gap-4">
+								<Received>
+									<Question q={s.q} sub={s.sub} current={current} />
+									{tip(n)}
+								</Received>
+								{!current && n < LAST && answer(n)}
+							</div>
+						</div>
+					);
+				})}
+
+				{done && (
 					<>
-						{shownThrough >= 1 && draft.goal !== null && (
-							<Sent n={1} onEdit={(n) => void goTo(n)}>
-								<span className="text-lg font-bold">{formatGoal(draft.goal)}</span>
-							</Sent>
-						)}
-						{shownThrough >= 2 && draft.coverUrl && (
-							<Sent n={2} onEdit={(n) => void goTo(n)}>
-								<CoverImage
-									src={draft.coverUrl}
-									alt="Your cover"
-									className="w-16 rounded-2xl"
-								/>
-							</Sent>
-						)}
-						{shownThrough >= 3 && draft.title.trim() && (
-							<Sent n={3} onEdit={(n) => void goTo(n)}>
-								<span className="text-lg font-bold wrap-break-word">{draft.title}</span>
-							</Sent>
+						<Sent n={LAST}>
+							<span className="text-lg font-bold">Looks good</span>
+						</Sent>
+						{!replying && (
+							<div className="grow-in">
+								<Received>
+									<div className="bubble-in min-w-0 rounded-3xl bg-card px-5 py-4">
+										<p className="inline-flex items-center gap-2 text-2xl font-extrabold tracking-[-0.02em] text-accent md:text-3xl">
+											<svg viewBox="0 0 20 20" className="h-6 w-6 shrink-0" fill="currentColor" aria-hidden="true">
+												<path d="M10 0a10 10 0 1 0 0 20A10 10 0 0 0 10 0Zm4.7 7.7-5.5 5.5a1 1 0 0 1-1.4 0L5.3 10.7a1 1 0 1 1 1.4-1.4L8.5 11l4.8-4.8a1 1 0 0 1 1.4 1.4Z" />
+											</svg>
+											Saved in this browser
+										</p>
+										<p className="mt-1.5 text-base text-mute md:text-lg">
+											Nothing is public yet. This is your draft.
+										</p>
+									</div>
+								</Received>
+							</div>
 						)}
 					</>
 				)}
 
-				<div key={`${step}-${done}-q`} className="fly-question flex flex-col gap-3">
-					<div className="flex items-end gap-3">
-						<span
-							className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink text-card"
-							aria-hidden="true"
-						>
-							<HorizonMark className="h-5 w-auto" />
-						</span>
-						<div className="min-w-0 rounded-3xl rounded-bl-lg bg-card px-6 py-5">
-							<h1 className="text-[1.75rem] leading-[1.15] font-extrabold tracking-[-0.02em] text-balance md:text-4xl md:leading-[1.12]">
-								{heading}
-							</h1>
-							<p className="mt-2 text-base text-mute md:text-lg">{sub}</p>
-						</div>
-					</div>
-					{!done && step === 2 && !coverCropping && (
-						<Tip title="Choosing a photo">
-							<p>Use a clear, bright photo. If possible, pick one from a happier time.</p>
-						</Tip>
-					)}
-					{!done && step === 3 && (
-						<Tip title="A good title">
-							<p>Mention who or what it’s for, and the action.</p>
-						</Tip>
-					)}
-					{!done && step === 4 && (
-						<Tip title="What a good story covers">
-							<ol className="list-decimal space-y-1 pl-4 marker:font-bold marker:text-accent">
-								<li>Introduce yourself.</li>
-								<li>Say who or what you’re fundraising for.</li>
-								<li>Explain what happened.</li>
-								<li>Share how the money will be used.</li>
-							</ol>
-						</Tip>
-					)}
-				</div>
-
-				<div
-					key={`${step}-${done}-c`}
-					className={`flex flex-col gap-4 ${sending ? 'sending-draft' : 'fly-compose'}`}
-				>
-					{done || step === LAST ? (
-						<section className="ml-8 rounded-3xl rounded-tl-lg bg-card px-6 pt-5 pb-2 md:ml-14" aria-label="Your draft">
-							{done && (
-								<p className="mb-4 inline-flex items-center gap-2 text-xl font-extrabold text-accent">
-									<svg viewBox="0 0 20 20" className="h-6 w-6" fill="currentColor" aria-hidden="true">
-										<path d="M10 0a10 10 0 1 0 0 20A10 10 0 0 0 10 0Zm4.7 7.7-5.5 5.5a1 1 0 0 1-1.4 0L5.3 10.7a1 1 0 1 1 1.4-1.4L8.5 11l4.8-4.8a1 1 0 0 1 1.4 1.4Z" />
-									</svg>
-									Draft confirmed
-								</p>
-							)}
-							<div className="divide-y divide-dashed divide-line">
-								<ReceiptRow label="Title" n={3} done={done} onEdit={(n) => void goTo(n)}>
-									<p className="text-xl font-bold wrap-break-word">{draft.title}</p>
-								</ReceiptRow>
-								<div className="py-4">
-									<p className="text-sm font-medium text-mute">Cover photo</p>
-									{draft.coverUrl ? (
-										<div className="relative mt-1 w-48 max-w-full">
-											<CoverImage
-												src={draft.coverUrl}
-												alt="Your cover"
-												className="rounded-2xl"
-											/>
-											{photoEdit(2)}
-										</div>
-									) : (
-										<p className="mt-1 text-base">None added</p>
-									)}
-								</div>
-								<ReceiptRow label="Goal" n={1} done={done} onEdit={(n) => void goTo(n)}>
-									<p className="text-3xl font-extrabold tracking-[-0.02em]">
-										{draft.goal !== null ? formatGoal(draft.goal) : '—'}
-									</p>
-								</ReceiptRow>
-								<ReceiptRow label="Story" n={4} done={done} onEdit={(n) => void goTo(n)}>
-									<p className="whitespace-pre-wrap text-base leading-relaxed">{draft.story}</p>
-								</ReceiptRow>
-							</div>
-						</section>
-					) : step === 1 ? (
-						<>
-							<label className="compose-card ml-15 flex items-baseline gap-3 rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent">
-								<span className="sr-only">Goal in Kenyan shillings</span>
-								<span className="shrink-0 text-2xl font-extrabold text-accent md:text-3xl" aria-hidden="true">
-									Ksh
-								</span>
-								<span className="goal-fit min-w-0 flex-1">
-									<input
-										className="goal-amount field-bare min-w-0 overflow-hidden whitespace-nowrap font-extrabold tracking-[-0.03em]"
-										size={1}
-										inputMode="numeric"
-										autoComplete="off"
-										placeholder="0"
-										value={goalText}
-										onChange={onGoalInput}
-										onKeyDown={onGoalKeydown}
-									/>
-								</span>
-							</label>
-							<div className="ml-15 flex flex-wrap gap-2" role="group" aria-label="Suggested goals">
-								{SUGGESTED.map((amount) => (
-									<button
-										key={amount}
-										type="button"
-										className={`rounded-full border-2 px-5 py-2.5 text-base font-bold transition-colors ${
-											draft.goal === amount
-												? 'border-accent bg-accent text-card'
-												: 'border-line bg-card text-accent hover:border-accent'
-										}`}
-										aria-pressed={draft.goal === amount}
-										onClick={() => pickSuggested(amount)}
-									>
-										{formatGoal(amount)}
-									</button>
-								))}
-							</div>
-						</>
-					) : step === 2 ? (
-						<CoverPhotoField
-							ref={coverField}
-							coverUrl={draft.coverUrl}
-							onReadyChange={setCoverReady}
-							onCroppingChange={setCoverCropping}
-						/>
-					) : step === 3 ? (
-						<label className="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent">
-							<span className="sr-only">Title</span>
-							<textarea
-								className="field-bare min-h-[1.2em] resize-none text-2xl font-bold tracking-[-0.01em] wrap-break-word md:text-3xl [field-sizing:content]"
-								rows={1}
-								maxLength={80}
-								placeholder="Help Maya get home"
-								value={draft.title}
-								onChange={(event) => patchDraft({ title: event.currentTarget.value })}
-								onKeyDown={onEnter}
-							/>
-							<span className="mt-2 block text-right text-xs font-medium text-mute">
-								{draft.title.length} / 80
-							</span>
-						</label>
-					) : (
-						<label className="compose-card ml-15 block rounded-3xl rounded-tr-lg border-2 border-line bg-card px-6 py-5 transition-colors duration-150 focus-within:border-accent">
-							<span className="sr-only">Story</span>
-							<textarea
-								className="field-bare min-h-56 resize-none text-lg leading-relaxed [field-sizing:content]"
-								maxLength={4000}
-								placeholder="Hi, I’m Jane. I’m raising money for…"
-								value={draft.story}
-								onChange={(event) => patchDraft({ story: event.currentTarget.value })}
-							/>
-							<span className="mt-2 block text-right text-xs font-medium text-mute">
-								{draft.story.length} / 4000
-							</span>
-						</label>
-					)}
-				</div>
+				{typing && <Typing />}
 			</main>
 
-			<footer className="fixed inset-x-0 bottom-0 border-t-2 border-line bg-paper/95 backdrop-blur">
-				<div className="mx-auto flex w-full max-w-[40rem] items-center justify-between gap-4 px-4 py-4">
+			<footer ref={footerRef} className="sticky bottom-0 z-10 border-t-2 border-line bg-paper/95 backdrop-blur">
+				<div
+					className="mx-auto flex w-full max-w-[40rem] flex-col gap-3 px-4 py-3"
+					onKeyDown={onCoverKeydown}
+					onDragOver={(event) => {
+						if (active !== 2 || done) return;
+						event.preventDefault();
+						setDragging(true);
+					}}
+					onDragLeave={() => setDragging(false)}
+					onDrop={onDrop}
+				>
+					{/* Mounted for the whole flow so the tray can lower after send, not vanish with the form. */}
+					<CoverPhotoField
+						ref={coverField}
+						active={active === 2 && !done}
+						coverUrl={draft.coverUrl}
+						onReadyChange={setCoverReady}
+						onCroppingChange={setCoverCropping}
+					/>
 					{done ? (
-						<>
+						<div className="field-swap flex items-center justify-between gap-4 py-1">
 							<button
 								type="button"
 								className="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink"
@@ -466,38 +768,193 @@ export default function Create() {
 							>
 								Start another
 							</Link>
-						</>
-					) : (
-						<>
-							{step === 1 ? (
-								<Link
-									to="/"
-									className="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink"
-								>
-									Cancel
-								</Link>
-							) : (
-								<button
-									type="button"
-									className="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink"
-									onClick={goBack}
-								>
-									Back
-								</button>
-							)}
+						</div>
+					) : active === LAST ? (
+						<div className="field-swap flex items-center justify-between gap-4 py-1">
 							<button
 								type="button"
-								className={`btn-press min-w-40 ${
-									canContinue && !coverBusy
-										? 'bg-accent text-card hover:bg-accent-deep'
-										: 'bg-line text-mute'
-								}`}
-								disabled={!canContinue || coverBusy}
+								className="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink"
+								onClick={goBack}
+							>
+								Back
+							</button>
+							<button
+								type="button"
+								className={`btn-press min-w-40 ${busy ? 'bg-line text-mute' : 'bg-accent text-card hover:bg-accent-deep'}`}
+								disabled={busy}
 								onClick={() => void goNext()}
 							>
-								{step === LAST ? 'Looks good' : 'Continue'}
+								Looks good
 							</button>
-						</>
+						</div>
+					) : (
+						<form
+							className="flex flex-col"
+							onSubmit={(event) => {
+								event.preventDefault();
+								void goNext();
+							}}
+						>
+							<Unfold open={editing !== null}>
+								<div className="flex items-center justify-between gap-3 px-2 pb-3">
+									<p className="text-sm font-bold text-mute">Editing {editLabel}</p>
+									<button
+										type="button"
+										className="rounded-full px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:bg-card"
+										onClick={cancelEdit}
+									>
+										Cancel
+									</button>
+								</div>
+							</Unfold>
+
+							<Unfold open={active === 1}>
+								<div
+									className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-3.5 [scrollbar-width:none]"
+									role="group"
+									aria-label="Suggested goals"
+								>
+									{SUGGESTED.map((amount) => (
+										<button
+											key={amount}
+											type="button"
+											className={`shrink-0 rounded-full border-2 px-4 py-2 text-sm font-bold transition-[color,background-color,border-color,transform] duration-150 active:scale-95 ${
+												draft.goal === amount
+													? 'border-accent bg-accent text-card'
+													: 'border-line bg-card text-accent hover:border-accent'
+											}`}
+											aria-pressed={draft.goal === amount}
+											onClick={() => pickSuggested(amount)}
+										>
+											{formatGoal(amount)}
+										</button>
+									))}
+								</div>
+							</Unfold>
+
+							<Unfold open={active === 4}>
+								<div className="pb-3">
+									<StoryToolbar formats={storyFormats} editor={storyRef} />
+								</div>
+							</Unfold>
+
+							<div
+								className={`compose-bar flex items-end gap-2 rounded-[1.75rem] border-2 bg-card py-1.5 pr-1.5 pl-2 transition-colors duration-150 focus-within:border-accent ${
+									dragging ? 'border-accent' : 'border-line'
+								}`}
+							>
+								{/* Keyed on the step so the field fades in place while the bar itself stays put. */}
+								<div key={active} className="field-swap flex min-w-0 flex-1 items-end gap-2">
+									{active === 2 && (
+										<button
+											type="button"
+											className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sun text-accent transition-[background-color,transform] duration-150 hover:bg-line active:scale-95"
+											onClick={() => coverField.current?.openPicker()}
+											aria-label={coverReady || coverCropping ? 'Change photo' : 'Choose a photo'}
+										>
+											<svg
+												viewBox="0 0 24 24"
+												className="h-5 w-5"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2.2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												aria-hidden="true"
+											>
+												<path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
+												<circle cx="12" cy="12.5" r="3.5" />
+											</svg>
+										</button>
+									)}
+	
+									{active === 1 ? (
+										<label className="flex min-h-10 min-w-0 flex-1 items-center gap-2 pl-2">
+											<span className="sr-only">Goal in Kenyan shillings</span>
+											<span className="shrink-0 text-lg font-extrabold text-accent" aria-hidden="true">
+												Ksh
+											</span>
+											<input
+												ref={fieldRef}
+												className="field-bare min-w-0 flex-1 text-2xl font-extrabold tracking-[-0.02em]"
+												inputMode="numeric"
+												autoComplete="off"
+												placeholder="0"
+												value={goalText}
+												onChange={onGoalInput}
+												onKeyDown={onGoalKeydown}
+												disabled={replying}
+											/>
+										</label>
+									) : active === 2 ? (
+										<button
+											type="button"
+											data-photo-prompt
+											className="flex min-h-10 min-w-0 flex-1 items-center pl-1 text-left text-base text-hint"
+											onClick={() => coverField.current?.openPicker()}
+										>
+											{coverReady || coverCropping ? 'Click to change' : 'Click to add'}
+										</button>
+									) : active === 3 ? (
+										<label className="flex min-h-10 min-w-0 flex-1 items-center pl-2">
+											<span className="sr-only">Title</span>
+											<input
+												ref={fieldRef}
+												className="field-bare min-w-0 flex-1 py-1.5 text-lg font-bold tracking-[-0.01em]"
+												maxLength={80}
+												placeholder="Help Maya get home"
+												value={draft.title}
+												onChange={(event) => patchDraft({ title: event.currentTarget.value })}
+												onKeyDown={onTitleKeydown}
+												disabled={replying}
+											/>
+										</label>
+									) : (
+										<div className="flex min-h-10 min-w-0 flex-1 items-center pl-2">
+											<StoryEditor
+												ref={storyRef}
+												value={draft.story}
+												onChange={(story) => patchDraft({ story })}
+												onFormatsChange={onStoryFormats}
+												onKeyDown={onEnter}
+												disabled={replying}
+												placeholder="Hi, I’m Jane. I’m raising money for…"
+											/>
+										</div>
+									)}
+								</div>
+
+								<SendButton buttonRef={sendRef} disabled={!canContinue || busy} />
+							</div>
+
+							<div className="mt-3 flex min-h-6 items-center justify-between gap-3 px-2 text-xs font-medium text-hint">
+								<span className="hidden sm:inline">
+									{active === 2
+										? 'JPG, PNG, HEIC, WebP · up to 25 MB · or drop one here'
+										: active === 4
+											? 'Enter to send · Shift + Enter for a new line'
+											: 'Enter to send'}
+								</span>
+								<span className="sm:hidden">
+									{active === 2 ? 'JPG, PNG, HEIC, WebP · up to 25 MB' : ''}
+								</span>
+								{showSkip && (
+									<button
+										type="button"
+										className="ml-auto rounded-full px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:bg-card"
+										onClick={() => void skipCover()}
+									>
+										Skip for now
+									</button>
+								)}
+								{active === 3 && <span className="ml-auto tabular-nums">{draft.title.length} / 80</span>}
+								{active === 4 && (
+									<span className={`ml-auto tabular-nums ${storyChars > STORY_MAX ? 'font-bold text-error' : ''}`}>
+										{storyChars} / {STORY_MAX}
+									</span>
+								)}
+							</div>
+						</form>
 					)}
 				</div>
 			</footer>

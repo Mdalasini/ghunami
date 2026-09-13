@@ -10,19 +10,12 @@ export function HorizonMark({ className }: { className: string }) {
 	);
 }
 
+/* A received-side helper bubble. Render it inside a message group; the group draws the avatar. */
 export function Tip({ title, children }: { title: string; children: ReactNode }) {
 	return (
-		<div className="flex items-end gap-3">
-			<span
-				className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-ink text-card"
-				aria-hidden="true"
-			>
-				<HorizonMark className="h-5 w-auto" />
-			</span>
-			<aside className="min-w-0 rounded-3xl rounded-bl-lg bg-card px-5 py-4 text-mute">
-				<p className="text-sm font-bold text-ink">{title}</p>
-				<div className="mt-1.5 text-sm leading-relaxed">{children}</div>
-			</aside>
-		</div>
+		<aside className="bubble-in min-w-0 self-start rounded-3xl bg-card px-5 py-4 text-mute">
+			<p className="text-sm font-bold text-ink">{title}</p>
+			<div className="mt-1.5 text-sm leading-relaxed">{children}</div>
+		</aside>
 	);
 }

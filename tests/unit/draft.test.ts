@@ -21,9 +21,28 @@ describe('draft', () => {
 			goal: null,
 			coverUrl: '',
 			coverName: '',
+			coverSkipped: false,
 			title: '',
 			story: ''
 		});
+	});
+
+	it('clears a skipped flag when a cover is set and revokes it on clearCover', async () => {
+		const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:cover');
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+		const { setCover, clearCover, patchDraft, getDraft } = await loadDraft();
+		patchDraft({ coverSkipped: true });
+		expect(getDraft().coverSkipped).toBe(true);
+
+		setCover(new File(['a'], 'cover.png', { type: 'image/png' }));
+		expect(getDraft()).toMatchObject({ coverUrl: 'blob:cover', coverSkipped: false });
+
+		clearCover();
+		expect(revokeObjectURL).toHaveBeenCalledWith('blob:cover');
+		expect(getDraft()).toMatchObject({ coverUrl: '', coverName: '', coverEdit: undefined });
+		createObjectURL.mockRestore();
+		revokeObjectURL.mockRestore();
 	});
 
 	it('patches only provided fields', async () => {
@@ -70,6 +89,45 @@ describe('draft', () => {
 		expect(getDraft()).toMatchObject({ coverUrl: '', coverName: '', title: '' });
 		createObjectURL.mockRestore();
 		revokeObjectURL.mockRestore();
+	});
+
+	it('keeps a held cover alive until the edit is committed, and restores it on cancel', async () => {
+		vi.spyOn(URL, 'createObjectURL').mockImplementation((file) => `blob:${file instanceof File ? file.name : 'x'}`);
+		const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+		const { setCover, clearCover, holdCover, restoreHeldCover, releaseHeldCover, getDraft } = await loadDraft();
+		setCover(new File(['a'], 'first.png', { type: 'image/png' }));
+
+		// Cancel path: remove, then restore.
+		const snapshot = holdCover();
+		clearCover();
+		expect(revokeObjectURL).not.toHaveBeenCalled();
+		expect(getDraft().coverUrl).toBe('');
+		restoreHeldCover(snapshot);
+		expect(getDraft()).toMatchObject({ coverUrl: 'blob:first.png', coverName: 'first.png', coverSkipped: false });
+		expect(revokeObjectURL).not.toHaveBeenCalled();
+
+		// Cancel path: replace, then restore drops the replacement.
+		holdCover();
+		setCover(new File(['b'], 'second.png', { type: 'image/png' }));
+		expect(revokeObjectURL).not.toHaveBeenCalled();
+		restoreHeldCover(snapshot);
+		expect(revokeObjectURL).toHaveBeenCalledWith('blob:second.png');
+		expect(getDraft().coverUrl).toBe('blob:first.png');
+
+		// Commit path: replace, then release revokes the old one.
+		revokeObjectURL.mockClear();
+		holdCover();
+		setCover(new File(['c'], 'third.png', { type: 'image/png' }));
+		releaseHeldCover();
+		expect(revokeObjectURL).toHaveBeenCalledWith('blob:first.png');
+		expect(getDraft().coverUrl).toBe('blob:third.png');
+
+		// Commit without changes must not revoke the cover still in use.
+		revokeObjectURL.mockClear();
+		holdCover();
+		releaseHeldCover();
+		expect(revokeObjectURL).not.toHaveBeenCalled();
 	});
 
 	it('isolates module state between tests', async () => {
