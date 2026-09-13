@@ -14,16 +14,7 @@ export default function Home() {
 				<Link to="/" aria-label="ghunami — home">
 					<img src={logo} alt="ghunami" className="h-8 w-auto" />
 				</Link>
-				<div className="flex items-center gap-2">
-					<AuthBar />
-					<Link
-						to="/create"
-						onClick={resetDraft}
-						className="font-ui rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-sun"
-					>
-						Start a fundraiser
-					</Link>
-				</div>
+				<AuthBar />
 			</header>
 
 			<main className="mx-auto flex max-w-3xl flex-col items-center pt-28 text-center md:pt-36">
