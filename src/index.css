@@ -135,13 +135,56 @@ textarea {
 	animation: bubble-in 260ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
-.fly-compose {
-	animation: fly-in 260ms cubic-bezier(0.215, 0.61, 0.355, 1) 60ms both;
-}
-
 .fly-sent {
 	transform-origin: bottom right;
 	animation: fly-in-sent 320ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+/* The cover lands a beat late so the tray has gone before the bubble rises where it was. Mirrored by COVER_LAND_MS. */
+.grow-in.sent-late,
+.sent-late .fly-sent {
+	animation-delay: 220ms;
+}
+
+/*
+ * The composer is one persistent bar. Only its contents change between steps: the field fades in
+ * place, and the rows above it (suggestions, toolbar, edit header) unfold rather than mount.
+ */
+@keyframes field-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.field-swap {
+	animation: field-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+}
+
+.unfold {
+	display: grid;
+	grid-template-rows: 0fr;
+	opacity: 0;
+	transition:
+		grid-template-rows 260ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 180ms ease-out;
+}
+
+.unfold.is-open {
+	grid-template-rows: 1fr;
+	opacity: 1;
+	transition:
+		grid-template-rows 260ms cubic-bezier(0.215, 0.61, 0.355, 1),
+		opacity 200ms ease-out 60ms;
+}
+
+.unfold > * {
+	min-height: 0;
+	overflow: hidden;
 }
 
 /* The second bubble in a received run lands a beat after the first, so they read as two messages. */
@@ -185,6 +228,20 @@ textarea {
 		transform 360ms cubic-bezier(0.215, 0.61, 0.355, 1),
 		opacity 200ms ease-out,
 		visibility 0s;
+}
+
+/*
+ * Sending: instead of lowering, the tray shrinks toward the corner the bubble rises from and is
+ * gone before the bubble appears. Mirrored by TRAY_SENT_MS in CoverPhotoField.
+ */
+.cover-tray.is-sent {
+	transform-origin: bottom right;
+	transform: translateY(12px) scale(0.92);
+	opacity: 0;
+	transition:
+		transform 200ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
+		opacity 120ms ease-in,
+		visibility 0s linear 200ms;
 }
 
 /* `.grow-in` plays once on mount: content grows from 0 so everything above slides up instead of jumping. */

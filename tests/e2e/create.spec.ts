@@ -1,6 +1,33 @@
-import { type Locator } from '@playwright/test';
+import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { pngFromPixels, solidPng } from './png';
+
+type Box = { x: number; y: number; width: number; height: number };
+
+/* Bubbles land with a short scale animation; wait until two reads 100 ms apart agree. */
+async function settledBox(page: Page, locator: Locator): Promise<Box> {
+	let box: Box | null = null;
+	await expect
+		.poll(async () => {
+			const first = await locator.boundingBox();
+			await page.waitForTimeout(100);
+			const second = await locator.boundingBox();
+			if (!first || !second || JSON.stringify(first) !== JSON.stringify(second)) return false;
+			box = second;
+			return true;
+		})
+		.toBe(true);
+	if (!box) throw new Error('Element never settled');
+	return box;
+}
+
+/* Sub-pixel noise from animation frames is not a reflow; anything at or above half a pixel is. */
+function expectSameBox(actual: Box | null, expected: Box) {
+	expect(actual).not.toBeNull();
+	for (const key of ['x', 'y', 'width', 'height'] as const) {
+		expect(Math.abs(actual![key] - expected[key])).toBeLessThan(0.5);
+	}
+}
 
 const sharpCover = {
 	name: 'cover.png',
@@ -97,9 +124,12 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(goalAnswer).toHaveText(/100,000/);
 
-	// Switching to another answer discards the unsent change too.
+	// Clearing the field mid-edit keeps the sent bubble showing the answer that was sent.
 	await goalAnswer.click();
 	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('');
+	await expect(goalAnswer).toHaveText(/100,000/);
+	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+	// Switching to another answer discards the unsent change too.
 	await titleAnswer.click();
 	await expect(page.getByRole('contentinfo').getByText('Editing the title')).toBeVisible();
 	await expect(goalAnswer).toHaveText(/100,000/);
@@ -136,14 +166,27 @@ test('can skip the cover, remove a chosen photo, and return to it later', async 
 	await expect(cover).toBeVisible();
 	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
 
-	// Removing the cover during an edit and cancelling brings the original back, still loadable.
+	// Removing the cover during an edit leaves the sent bubble in place; cancelling keeps the original loadable.
 	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 	await page.getByRole('button', { name: 'Remove photo' }).click();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
-	await expect(cover).toHaveCount(0);
-	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(cover).toBeVisible();
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0);
+	await expect(cover).toBeVisible();
+	await expect
+		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+		.toBe(1080);
+
+	// Cancelling while the removal is still lowering the tray must not let that removal land on the restored cover.
+	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await page.getByRole('button', { name: 'Remove photo' }).click();
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await page.waitForTimeout(600);
+	await expect(cover).toBeVisible();
+	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
 	await expect
 		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
 		.toBe(1080);
@@ -338,6 +381,32 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	expect(closerTo(bottom, BLUE, RED)).toBe('a');
 });
 
+test('opening an edit does not scroll the thread to the bottom', async ({ page }) => {
+	await page.setViewportSize({ width: 420, height: 560 });
+	await page.goto('/create');
+	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
+	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('button', { name: 'Skip for now' }).click();
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
+	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
+	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+
+	const goalAnswer = page.getByRole('button', { name: 'Change your answer to step 1' });
+	await goalAnswer.scrollIntoViewIfNeeded();
+	await expect
+		.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY))
+		.toBeGreaterThan(200);
+	const before = await page.evaluate(() => window.scrollY);
+	await goalAnswer.click();
+	await expect(page.getByRole('contentinfo').getByText('Editing your goal')).toBeVisible();
+	await page.waitForTimeout(600);
+	const after = await page.evaluate(() => window.scrollY);
+	expect(Math.abs(after - before)).toBeLessThan(120);
+	await expect(goalAnswer).toBeInViewport();
+});
+
 test('the photo tray rises over the thread and lowers again without moving it', async ({ page }) => {
 	await page.goto('/create');
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
@@ -347,8 +416,9 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	await expect(heading).toBeVisible();
 	await expect(tip).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
-	const before = await heading.boundingBox();
-	const tipBefore = await tip.boundingBox();
+	// The bubbles are still landing and the suggestion row is folding away; let the layout settle first.
+	const before = await settledBox(page, heading);
+	const tipBefore = await settledBox(page, tip);
 
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	const tray = page.locator('.cover-tray');
@@ -356,8 +426,8 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	const cropper = page.locator('.cover-crop-container');
 	await cropper.hover();
 	// The tray overlays the thread: nothing behind it was reflowed or hidden.
-	expect(await heading.boundingBox()).toEqual(before);
-	expect(await tip.boundingBox()).toEqual(tipBefore);
+	expectSameBox(await heading.boundingBox(), before);
+	expectSameBox(await tip.boundingBox(), tipBefore);
 	await expect(tip).toHaveCount(1);
 	const trayBox = await tray.boundingBox();
 	const footer = await page.getByRole('contentinfo').boundingBox();
@@ -367,13 +437,15 @@ test('the photo tray rises over the thread and lowers again without moving it', 
 	await page.getByRole('button', { name: 'Remove photo' }).click();
 	await expect(tray).not.toHaveClass(/is-raised/);
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeHidden();
-	expect(await heading.boundingBox()).toEqual(before);
-	expect(await tip.boundingBox()).toEqual(tipBefore);
+	expectSameBox(await heading.boundingBox(), before);
+	expectSameBox(await tip.boundingBox(), tipBefore);
 
 	// Sending lowers the tray too; the thread keeps the tip, and the cover lands as the next message.
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(tray).toHaveClass(/is-raised/);
 	await page.getByRole('button', { name: 'Send' }).click();
+	// Sent photos shrink away rather than lowering, so the bubble is not seen behind a moving tray.
+	await expect(tray).toHaveClass(/is-sent/);
 	await expect(tray).not.toHaveClass(/is-raised/);
 	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
 	await expect(tip).toBeVisible();

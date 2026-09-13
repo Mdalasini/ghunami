@@ -33,8 +33,11 @@ import { CoverImage } from './CoverImage';
 
 const Cropper = lazy(() => import('react-easy-crop'));
 
-/* Matches the `.cover-tray` close transition in index.css. */
+/* Match the `.cover-tray` close transitions in index.css: lowering out of view, or shrinking away when sent. */
 const TRAY_CLOSE_MS = 320;
+const TRAY_SENT_MS = 200;
+
+type Closing = 'lower' | 'sent' | null;
 
 type Size = { width: number; height: number };
 
@@ -84,10 +87,12 @@ export function CoverPhotoField({
 	const [warning, setWarning] = useState('');
 	const [reading, setReading] = useState(false);
 	const [processing, setProcessing] = useState(false);
-	/* Closing keeps the photo mounted while the tray lowers, then runs the queued cleanup. */
-	const [closing, setClosing] = useState(false);
+	/* Closing keeps the photo mounted while the tray leaves, then runs the queued cleanup. */
+	const [closing, setClosing] = useState<Closing>(null);
 	const closeTimer = useRef(0);
 	const onClosedRef = useRef<(() => void) | null>(null);
+	/* Set by a successful confirm, so deactivating right after reads as "sent" rather than "left". */
+	const sentRef = useRef(false);
 
 	/*
 	 * Until the cropper has measured itself, estimate from the original's size. Once it reports the
@@ -178,8 +183,8 @@ export function CoverPhotoField({
 		setCropQuality(null);
 	}
 
-	/* Lower the tray, then run `then` once it is out of view. Queued cleanups all run. */
-	function closeThen(then: () => void) {
+	/* Close the tray, then run `then` once it is out of view. Queued cleanups all run. */
+	function closeThen(then: () => void, how: Exclude<Closing, null> = 'lower') {
 		const previous = onClosedRef.current;
 		onClosedRef.current = previous
 			? () => {
@@ -187,23 +192,26 @@ export function CoverPhotoField({
 					then();
 				}
 			: then;
-		setClosing(true);
+		setClosing(how);
 		window.clearTimeout(closeTimer.current);
-		closeTimer.current = window.setTimeout(() => {
-			const queued = onClosedRef.current;
-			onClosedRef.current = null;
-			queued?.();
-			setClosing(false);
-		}, TRAY_CLOSE_MS);
+		closeTimer.current = window.setTimeout(
+			() => {
+				const queued = onClosedRef.current;
+				onClosedRef.current = null;
+				queued?.();
+				setClosing(null);
+			},
+			how === 'sent' ? TRAY_SENT_MS : TRAY_CLOSE_MS
+		);
 	}
 
-	/* A new photo interrupts a lowering tray: finish the queued cleanup now so it cannot swallow the new photo. */
+	/* A new photo interrupts a closing tray: finish the queued cleanup now so it cannot swallow the new photo. */
 	function settleClose() {
 		window.clearTimeout(closeTimer.current);
 		const queued = onClosedRef.current;
 		onClosedRef.current = null;
 		queued?.();
-		setClosing(false);
+		setClosing(null);
 	}
 
 	async function acceptFile(file: File | undefined, savedCrop?: Area) {
@@ -305,6 +313,7 @@ export function CoverPhotoField({
 				crop: cropPercent
 			} : undefined);
 			setError('');
+			sentRef.current = true;
 			return true;
 		} catch (caught) {
 			setError(caught instanceof Error ? caught.message : COVER_MESSAGES.encodeFailed);
@@ -341,11 +350,21 @@ export function CoverPhotoField({
 		closeThen(clearNow);
 	}
 
-	/* Leaving the step lowers the tray and then releases the photo; it is either sent or discarded. */
+	/*
+	 * Leaving the step closes the tray and then releases the photo; it was either sent or discarded.
+	 * From here the caller owns the draft's cover (Cancel restored it, Send or Skip replaced it), so a
+	 * removal still queued from this step must not run against it.
+	 */
 	useEffect(() => {
-		if (active) return;
+		if (active) {
+			sentRef.current = false;
+			return;
+		}
+		const sent = sentRef.current;
+		sentRef.current = false;
+		onClosedRef.current = null;
 		if (!decodedRef.current && !reading) return;
-		closeThen(dropPending);
+		closeThen(dropPending, sent ? 'sent' : 'lower');
 	}, [active]);
 
 	confirmRef.current = confirm;
@@ -359,7 +378,7 @@ export function CoverPhotoField({
 	const showCropper = Boolean(pending);
 	const showViewport = showCropper || reading;
 	const hasAttachment = showCropper || coverUrl !== '';
-	const open = active && (hasAttachment || reading) && !closing;
+	const open = active && (hasAttachment || reading) && closing === null;
 	const helper = canZoom ? 'Drag to reposition · zoom is limited to preserve photo quality' : 'Drag to reposition';
 	const message = error || warning;
 
@@ -373,7 +392,11 @@ export function CoverPhotoField({
 				onChange={onFileChange}
 			/>
 			<div className="cover-tray-dock" aria-hidden={!open}>
-				<div className={`cover-tray mx-auto w-full max-w-[40rem] px-4 ${open ? 'is-raised' : ''}`}>
+				<div
+					className={`cover-tray mx-auto w-full max-w-[40rem] px-4 ${
+						open ? 'is-raised' : closing === 'sent' ? 'is-sent' : ''
+					}`}
+				>
 					<div
 						className="attachment-tray relative overflow-hidden rounded-3xl border-2 border-line bg-card shadow-[0_-8px_32px_-12px_rgba(15,26,18,0.25)]"
 						style={showViewport ? {
