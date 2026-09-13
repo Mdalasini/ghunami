@@ -88,7 +88,9 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	await title.fill('Help Maya get home');
 	await title.press('Control+Enter');
 	await expect(title).toHaveValue('Help Maya get home');
-	await page.getByRole('button', { name: 'Send' }).click();
+	await title.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+	await expect(title).toBeVisible();
+	await title.press('Enter');
 
 	await expect(page.getByRole('heading', { name: 'Tell people what happened' })).toBeVisible();
 	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
@@ -121,11 +123,13 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	const goalAnswer = page.getByRole('button', { name: 'Change your answer to step 1' });
 	await goalAnswer.click();
 	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('75000');
+	await expect(page.getByRole('textbox', { name: 'Goal in Kenyan shillings' })).toHaveValue('75,000');
 	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(goalAnswer).toHaveText(/100,000/);
 
 	// Clearing the field mid-edit keeps the sent bubble showing the answer that was sent.
 	await goalAnswer.click();
+	await expect(page.getByRole('textbox', { name: 'Goal in Kenyan shillings' })).toHaveValue('100,000');
 	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('');
 	await expect(goalAnswer).toHaveText(/100,000/);
 	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();

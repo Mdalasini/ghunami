@@ -2,208 +2,95 @@ import { describe, expect, it } from 'vitest';
 import { convexTest } from 'convex-test';
 import { api, internal } from '../../convex/_generated/api';
 import schema from '../../convex/schema';
-import { getCurrentUser, requireAdmin } from '../../convex/lib/auth';
 import { modules } from './modules';
 
 function harness() {
 	return convexTest(schema, modules);
 }
 
+const maya = {
+	issuer: 'https://example.test',
+	workosUserId: 'maya',
+	email: '  Maya@Example.COM ',
+	firstName: 'Maya',
+	lastName: 'Otieno'
+};
+
 describe('users', () => {
 	it('me returns null when unauthenticated or the user is missing', async () => {
 		const t = harness();
 		expect(await t.query(api.users.me, {})).toBeNull();
-
-		const asGhost = t.withIdentity({ subject: 'missing', issuer: 'https://example.test' });
-		expect(await asGhost.query(api.users.me, {})).toBeNull();
+		const ghost = t.withIdentity({ subject: 'missing', issuer: maya.issuer });
+		expect(await ghost.query(api.users.me, {})).toBeNull();
 	});
 
-	it('me returns only the caller’s public fields', async () => {
+	it('me returns exactly the caller’s public fields, even for legacy rows', async () => {
 		const t = harness();
-		const asMaya = t.withIdentity({
-			subject: 'maya',
-			issuer: 'https://example.test',
-			name: 'Maya',
-			email: 'maya@example.com'
+		const id = await t.mutation(internal.users.upsertFromWorkOS, maya);
+		await t.run(async (ctx) => ctx.db.patch(id, { role: 'admin', pictureUrl: 'https://example.test/avatar' }));
+		await t.mutation(internal.users.upsertFromWorkOS, {
+			...maya, workosUserId: 'lee', email: 'lee@example.com', firstName: 'Lee'
 		});
-		const asLee = t.withIdentity({
-			subject: 'lee',
-			issuer: 'https://example.test',
-			name: 'Lee',
-			email: 'lee@example.com'
-		});
-
-		await asMaya.mutation(api.users.storeUser, {});
-		await asLee.mutation(api.users.storeUser, {});
-
-		const me = await asMaya.query(api.users.me, {});
-		expect(me).toMatchObject({
-			name: 'Maya',
-			email: 'maya@example.com',
-			role: 'user'
-		});
-		expect(me).not.toMatchObject({ email: 'lee@example.com' });
-		expect(me).not.toHaveProperty('tokenIdentifier');
-	});
-
-	it('storeUser rejects unauthenticated callers', async () => {
-		const t = harness();
-		await expect(t.mutation(api.users.storeUser, {})).rejects.toThrow('Not authenticated');
-	});
-
-	it('creates a user with role user and normalized email, then reuses the row', async () => {
-		const t = harness();
-		const asMaya = t.withIdentity({
-			subject: 'maya',
-			issuer: 'https://example.test',
-			name: 'Maya',
-			email: '  Maya@Example.COM '
-		});
-
-		const first = await asMaya.mutation(api.users.storeUser, {});
-		const second = await asMaya.mutation(api.users.storeUser, {});
-		expect(second).toBe(first);
-
-		const row = await t.run(async (ctx) => ctx.db.get(first));
-		expect(row).toMatchObject({
-			email: 'maya@example.com',
-			role: 'user',
-			name: 'Maya'
+		const caller = t.withIdentity({ subject: 'maya', issuer: maya.issuer });
+		expect(await caller.query(api.users.me, {})).toEqual({
+			_id: id, name: 'Maya Otieno', email: 'maya@example.com'
 		});
 	});
 
-	it('does not overwrite verified name and email with blank access-token claims', async () => {
+	it('upserts verified identities in place without writing legacy fields', async () => {
 		const t = harness();
 		const id = await t.mutation(internal.users.upsertFromWorkOS, {
-			issuer: 'https://api.workos.com/user_management/test',
-			workosUserId: 'user_1',
-			email: 'maya@example.com',
-			firstName: 'Maya',
-			lastName: 'Otieno'
+			...maya, firstName: null, lastName: null
 		});
-
-		const asMaya = t.withIdentity({
-			tokenIdentifier: 'https://api.workos.com/user_management/test|user_1',
-			subject: 'user_1',
-			issuer: 'https://api.workos.com/user_management/test'
+		const original = await t.run(async (ctx) => ctx.db.get(id));
+		expect(original).toEqual({
+			_id: id, _creationTime: expect.any(Number),
+			tokenIdentifier: 'https://example.test|maya',
+			name: 'maya@example.com', email: 'maya@example.com'
 		});
-		await asMaya.mutation(api.users.storeUser, {});
-
-		const row = await t.run(async (ctx) => ctx.db.get(id));
-		expect(row).toMatchObject({
-			name: 'Maya Otieno',
-			email: 'maya@example.com'
+		expect(await t.mutation(internal.users.upsertFromWorkOS, maya)).toBe(id);
+		expect(await t.run(async (ctx) => ctx.db.get(id))).toEqual({
+			...original, name: 'Maya Otieno'
 		});
-	});
-
-	it('does not demote an existing admin or insert a second record', async () => {
-		const t = harness();
-		const tokenIdentifier = 'https://example.test|admin-1';
-		const existingId = await t.run(async (ctx) =>
-			ctx.db.insert('users', {
-				tokenIdentifier,
-				name: 'Ada',
-				email: 'ada@example.com',
-				role: 'admin',
-				createdAt: 1
-			})
-		);
-
-		const asAdmin = t.withIdentity({
-			tokenIdentifier,
-			subject: 'admin-1',
-			issuer: 'https://example.test',
-			name: 'Ada',
-			email: 'ada@example.com'
-		});
-		const returned = await asAdmin.mutation(api.users.storeUser, {});
-		expect(returned).toBe(existingId);
-
-		const users = await t.run(async (ctx) => ctx.db.query('users').collect());
-		expect(users).toHaveLength(1);
-		expect(users[0]).toMatchObject({ role: 'admin', email: 'ada@example.com' });
-	});
-
-	it('upsertFromWorkOS maps issuer/subject, normalizes email, and updates in place', async () => {
-		const t = harness();
-		const first = await t.mutation(internal.users.upsertFromWorkOS, {
-			issuer: 'https://api.workos.com/user_management/test',
-			workosUserId: 'user_1',
-			email: '  Maya@Example.COM ',
-			firstName: null,
-			lastName: null
-		});
-		const row = await t.run(async (ctx) => ctx.db.get(first));
-		expect(row).toMatchObject({
-			tokenIdentifier: 'https://api.workos.com/user_management/test|user_1',
-			email: 'maya@example.com',
-			name: 'maya@example.com'
-		});
-
-		const second = await t.mutation(internal.users.upsertFromWorkOS, {
-			issuer: 'https://api.workos.com/user_management/test',
-			workosUserId: 'user_1',
-			email: 'maya@example.com',
-			firstName: 'Maya',
-			lastName: 'Otieno'
-		});
-		expect(second).toBe(first);
-		const updated = await t.run(async (ctx) => ctx.db.get(first));
-		expect(updated).toMatchObject({ name: 'Maya Otieno', email: 'maya@example.com' });
 	});
 
 	it('keeps distinct identities separate even when emails match', async () => {
 		const t = harness();
-		const a = await t.mutation(internal.users.upsertFromWorkOS, {
-			issuer: 'https://api.workos.com/user_management/test',
-			workosUserId: 'user_a',
-			email: 'shared@example.com',
-			firstName: 'A',
-			lastName: null
-		});
-		const b = await t.mutation(internal.users.upsertFromWorkOS, {
-			issuer: 'https://api.workos.com/user_management/test',
-			workosUserId: 'user_b',
-			email: 'shared@example.com',
-			firstName: 'B',
-			lastName: null
-		});
+		const a = await t.mutation(internal.users.upsertFromWorkOS, maya);
+		const b = await t.mutation(internal.users.upsertFromWorkOS, { ...maya, workosUserId: 'other' });
 		expect(a).not.toBe(b);
-		const users = await t.run(async (ctx) => ctx.db.query('users').collect());
-		expect(users).toHaveLength(2);
+		expect(await t.run(async (ctx) => ctx.db.query('users').collect())).toHaveLength(2);
 	});
 
-	it('requireAdmin and getCurrentUser enforce identity and role', async () => {
+	it('cleans legacy rows in resumable pages without changing identity or native metadata', async () => {
 		const t = harness();
-		await expect(t.query(async (ctx) => getCurrentUser(ctx))).rejects.toThrow('Not authenticated');
-
-		const asUser = t.withIdentity({
-			subject: 'user',
-			issuer: 'https://example.test',
-			email: 'user@example.com',
-			name: 'User'
+		await t.run(async (ctx) => {
+			for (let i = 0; i < 105; i++) {
+				await ctx.db.insert('users', {
+					tokenIdentifier: `https://example.test|${i}`,
+					name: 'Legacy', email: 'legacy@example.com',
+					role: i === 0 ? 'admin' : 'user', pictureUrl: 'https://example.test/avatar',
+					createdAt: 1, updatedAt: 2
+				});
+			}
 		});
-		await asUser.mutation(api.users.storeUser, {});
-		await expect(asUser.query(async (ctx) => requireAdmin(ctx))).rejects.toThrow(
-			'Admin access required'
-		);
-
-		const tokenIdentifier = 'https://example.test|admin-2';
-		await t.run(async (ctx) =>
-			ctx.db.insert('users', {
-				tokenIdentifier,
-				name: 'Boss',
-				email: 'boss@example.com',
-				role: 'admin',
-				createdAt: 1
-			})
-		);
-		const asAdmin = t.withIdentity({
-			tokenIdentifier,
-			subject: 'admin-2',
-			issuer: 'https://example.test'
+		const before = await t.run(async (ctx) => ctx.db.query('users').collect());
+		const first = await t.mutation(internal.migrations.removeLegacyUserFields, { cursor: null });
+		expect(first).toMatchObject({ processed: 100, isDone: false });
+		const second = await t.mutation(internal.migrations.removeLegacyUserFields, { cursor: first.cursor });
+		expect(second).toMatchObject({ processed: 5, isDone: true });
+		const expected = before.map(({ role, pictureUrl, createdAt, updatedAt, ...row }) => row);
+		expect(await t.run(async (ctx) => ctx.db.query('users').collect())).toEqual(expected);
+		await t.mutation(internal.users.upsertFromWorkOS, {
+			...maya, workosUserId: '0', firstName: 'Legacy', lastName: null, email: 'legacy@example.com'
 		});
-		const admin = await asAdmin.query(async (ctx) => requireAdmin(ctx));
-		expect(admin.role).toBe('admin');
+		let cursor: string | null = null;
+		for (;;) {
+			const result: { cursor: string; isDone: boolean; processed: number } =
+							await t.mutation(internal.migrations.removeLegacyUserFields, { cursor });
+			if (result.isDone) break;
+			cursor = result.cursor;
+		}
+		expect(await t.run(async (ctx) => ctx.db.query('users').collect())).toEqual(expected);
 	});
 });

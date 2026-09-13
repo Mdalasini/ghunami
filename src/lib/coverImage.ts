@@ -179,33 +179,14 @@ export function percentCropToPixels(
 
 export async function pickEncodedBlob(
 	encode: (type: string, quality: number) => Promise<Blob>,
-	type: string,
-	qualities: readonly number[] = COVER_QUALITY_STEPS
-): Promise<{ blob: Blob; quality: number; type: string }> {
-	if (qualities.length === 0) {
-		throw new Error(COVER_MESSAGES.encodeFailed);
+	type: string
+): Promise<Blob> {
+	let blob!: Blob;
+	for (const quality of COVER_QUALITY_STEPS) {
+		blob = await encode(type, quality);
+		if (blob.size <= MAX_COVER_OUTPUT_BYTES) break;
 	}
-
-	let last: { blob: Blob; quality: number } | undefined;
-	for (const quality of qualities) {
-		const blob = await encode(type, quality);
-		last = { blob, quality };
-		if (blob.size <= MAX_COVER_OUTPUT_BYTES) {
-			return { blob, quality, type };
-		}
-	}
-
-	if (!last) {
-		throw new Error(COVER_MESSAGES.encodeFailed);
-	}
-
-	return { blob: last.blob, quality: last.quality, type };
-}
-
-export function preferredCoverMimeType(
-	supportsType: (type: string) => boolean = canvasSupportsType
-): 'image/webp' | 'image/jpeg' {
-	return supportsType('image/webp') ? 'image/webp' : 'image/jpeg';
+	return blob;
 }
 
 export function coverFileName(originalName: string, mimeType: string): string {
@@ -214,17 +195,6 @@ export function coverFileName(originalName: string, mimeType: string): string {
 	return `${base}.${ext}`;
 }
 
-export function canvasSupportsType(type: string): boolean {
-	if (typeof document === 'undefined') return false;
-	const canvas = document.createElement('canvas');
-	canvas.width = 1;
-	canvas.height = 1;
-	try {
-		return canvas.toDataURL(type).startsWith(`data:${type}`);
-	} catch {
-		return false;
-	}
-}
 
 async function createOrientedBitmap(blob: Blob): Promise<ImageBitmap> {
 	try {
@@ -234,25 +204,16 @@ async function createOrientedBitmap(blob: Blob): Promise<ImageBitmap> {
 	}
 }
 
-export type CoverBitmapSource = {
-	createBitmap: (blob: Blob) => Promise<ImageBitmap>;
-	convertHeic: (file: File) => Promise<ImageBitmap>;
-	detectHeic: (file: File) => Promise<boolean>;
-};
-
-export async function bitmapFromCoverFile(
-	file: File,
-	source: CoverBitmapSource
-): Promise<ImageBitmap> {
+export async function bitmapFromCoverFile(file: File): Promise<ImageBitmap> {
 	try {
-		return await source.createBitmap(file);
+		return await createOrientedBitmap(file);
 	} catch {
-		const tryHeic = looksLikeHeic(file) || (await source.detectHeic(file));
+		const tryHeic = looksLikeHeic(file) || (await detectHeicMagic(file));
 		if (!tryHeic) {
 			throw new Error(COVER_MESSAGES.unreadable);
 		}
 		try {
-			return await source.convertHeic(file);
+			return await heicToBitmap(file);
 		} catch {
 			throw new Error(COVER_MESSAGES.unreadable);
 		}
@@ -282,17 +243,6 @@ async function detectHeicMagic(file: File): Promise<boolean> {
 	}
 }
 
-function defaultCoverBitmapSource(): CoverBitmapSource {
-	return {
-		createBitmap: createOrientedBitmap,
-		convertHeic: heicToBitmap,
-		detectHeic: detectHeicMagic
-	};
-}
-
-async function fileToBitmap(file: File): Promise<ImageBitmap> {
-	return await bitmapFromCoverFile(file, defaultCoverBitmapSource());
-}
 
 function require2dContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
 	const ctx = canvas.getContext('2d', { alpha: false });
@@ -331,7 +281,7 @@ async function bitmapPreviewUrl(bitmap: ImageBitmap): Promise<string> {
 }
 
 export async function decodeCoverImage(file: File): Promise<DecodedCover> {
-	const bitmap = await fileToBitmap(file);
+	const bitmap = await bitmapFromCoverFile(file);
 	try {
 		const previewUrl = await bitmapPreviewUrl(bitmap);
 		return {
@@ -358,9 +308,9 @@ export function releaseDecodedCover(decoded: DecodedCover | null | undefined) {
 
 export function drawCoverCrop(
 	bitmap: ImageBitmap,
-	crop: PixelCrop,
-	canvas: HTMLCanvasElement = document.createElement('canvas')
+	crop: PixelCrop
 ): HTMLCanvasElement {
+	const canvas = document.createElement('canvas');
 	const region = clampPixelCrop(crop, bitmap.width, bitmap.height);
 	canvas.width = COVER_OUTPUT_WIDTH;
 	canvas.height = COVER_OUTPUT_HEIGHT;
@@ -384,19 +334,19 @@ export async function encodeCoverCanvas(
 	canvas: HTMLCanvasElement,
 	originalName: string
 ): Promise<File> {
-	const type = preferredCoverMimeType();
-	const { blob } = await pickEncodedBlob(
-		(mime, quality) => canvasToBlob(canvas, mime, quality),
-		type
-	);
-	return new File([blob], coverFileName(originalName, type), { type });
+	const encode = (mime: string, quality: number) => canvasToBlob(canvas, mime, quality);
+	let blob = await pickEncodedBlob(encode, 'image/webp');
+	if (blob.type !== 'image/webp') {
+		blob = await pickEncodedBlob(encode, 'image/jpeg');
+	}
+	return new File([blob], coverFileName(originalName, blob.type), { type: blob.type });
 }
 
 export async function processCoverCrop(
 	bitmap: ImageBitmap,
 	percentCrop: PixelCrop,
 	originalName: string
-): Promise<{ file: File; cropPixels: PixelCrop; quality: CropQuality }> {
+): Promise<File> {
 	const cropPixels = percentCropToPixels(percentCrop, bitmap.width, bitmap.height);
 	const quality = assessCropResolution(cropPixels.width, cropPixels.height);
 	if (quality === 'too_small') {
@@ -404,6 +354,5 @@ export async function processCoverCrop(
 	}
 
 	const canvas = drawCoverCrop(bitmap, cropPixels);
-	const file = await encodeCoverCanvas(canvas, originalName);
-	return { file, cropPixels, quality };
+	return await encodeCoverCanvas(canvas, originalName);
 }

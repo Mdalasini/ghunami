@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { HorizonMark } from './Tip';
+import { HorizonDisc } from './Tip';
 
 /**
  * Every auth screen sits on the same centred column: Horizon disc, display
@@ -41,12 +41,7 @@ export function AuthShell({
 
 			<main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center pb-16">
 				<div className="flex flex-col items-center text-center">
-					<span
-						className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-ink text-card"
-						aria-hidden="true"
-					>
-						<HorizonMark className="h-6 w-auto" />
-					</span>
+					<HorizonDisc className="h-14 w-14 [&_svg]:h-6" />
 					<h1 className="font-display mt-5 text-3xl font-extrabold tracking-tight md:text-4xl">
 						{title}
 					</h1>

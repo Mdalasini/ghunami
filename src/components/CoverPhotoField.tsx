@@ -77,7 +77,7 @@ export function CoverPhotoField({
 	const cropPercentRef = useRef<Area | null>(null);
 	const confirmRef = useRef<() => Promise<boolean>>(async () => false);
 	const loadIdRef = useRef(0);
-	const [client, setClient] = useState(false);
+
 	const [pending, setPending] = useState<DecodedCover | null>(null);
 	const [fileName, setFileName] = useState('');
 	const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
@@ -130,9 +130,6 @@ export function CoverPhotoField({
 		return () => observer.disconnect();
 	}, [pending, reading]);
 
-	useEffect(() => {
-		setClient(true);
-	}, []);
 
 	useEffect(() => {
 		onCroppingChange?.(Boolean(pending));
@@ -150,24 +147,18 @@ export function CoverPhotoField({
 		};
 	}, []);
 
-	const publishReady = useCallback(
-		(ready: boolean) => {
-			onReadyChange(ready);
-		},
-		[onReadyChange]
-	);
 
 	useEffect(() => {
 		if (closing || !active) {
-			publishReady(false);
+			onReadyChange(false);
 			return;
 		}
 		if (pending) {
-			publishReady(cropQuality !== null && cropQuality !== 'too_small' && !reading && !processing);
+			onReadyChange(cropQuality !== null && cropQuality !== 'too_small' && !reading && !processing);
 			return;
 		}
-		publishReady(coverUrl !== '' && !reading && !processing);
-	}, [active, pending, cropQuality, coverUrl, reading, processing, closing, publishReady]);
+		onReadyChange(coverUrl !== '' && !reading && !processing);
+	}, [active, pending, cropQuality, coverUrl, reading, processing, closing, onReadyChange]);
 
 	function replacePending(next: DecodedCover | null) {
 		releaseDecodedCover(decodedRef.current);
@@ -195,12 +186,7 @@ export function CoverPhotoField({
 		setClosing(how);
 		window.clearTimeout(closeTimer.current);
 		closeTimer.current = window.setTimeout(
-			() => {
-				const queued = onClosedRef.current;
-				onClosedRef.current = null;
-				queued?.();
-				setClosing(null);
-			},
+			settleClose,
 			how === 'sent' ? TRAY_SENT_MS : TRAY_CLOSE_MS
 		);
 	}
@@ -307,7 +293,7 @@ export function CoverPhotoField({
 
 		setProcessing(true);
 		try {
-			const { file } = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
+			const file = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
 			setCover(file, originalRef.current ? {
 				original: originalRef.current,
 				crop: cropPercent
@@ -433,7 +419,7 @@ export function CoverPhotoField({
 									className="relative w-full overflow-hidden bg-ink"
 									style={{ aspectRatio: COVER_ASPECT }}
 								>
-									{pending && client && cropSize ? (
+									{pending && cropSize ? (
 										<Suspense
 											fallback={
 												<img

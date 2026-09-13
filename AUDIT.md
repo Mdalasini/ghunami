@@ -1,6 +1,8 @@
 # Ponytail audit
 
-Scope: over-engineering only. Ranked by the biggest cut first. Nothing has been applied yet.
+Scope: over-engineering only. Ranked by the biggest cut first.
+
+Implemented below, with legacy user-field removal staged for deployment safety: deprecated schema fields remain optional until the migration in [convex/MIGRATIONS.md](convex/MIGRATIONS.md) has completed. No live migration has been run. Sessions predating login-time user persistence may require signing in again. The findings below retain their original line references.
 
 1. `yagni:` `storeUser` mutation + `EnsureUser` component. `upsertFromWorkOS` already writes the row on every login (`verifyCode`/`exchangeCode`), and `storeUser` refuses blank overwrites, so all it does now is bump `updatedAt`, which nothing reads. Delete both and their tests. Only keep them if sessions from before `upsertFromWorkOS` existed still need backfilling. [convex/users.ts:13, src/components/ConvexClientProvider.tsx:90]
 2. `delete:` `authedQuery`/`authedMutation` have zero callers. Delete the file and the `convex-helpers` dependency. [convex/lib/customFunctions.ts]

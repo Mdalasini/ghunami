@@ -50,7 +50,7 @@ describe('authFlow', () => {
 	const previousClient = process.env.WORKOS_CLIENT_ID;
 
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		process.env.WORKOS_API_KEY = TEST_WORKOS_API_KEY;
 		process.env.WORKOS_CLIENT_ID = TEST_WORKOS_CLIENT_ID;
@@ -134,8 +134,7 @@ describe('authFlow', () => {
 		expect(users[0]).toMatchObject({
 			tokenIdentifier: `https://api.workos.com/user_management/${TEST_WORKOS_CLIENT_ID}|user_maya`,
 			email: 'maya@example.com',
-			name: 'Maya Otieno',
-			role: 'user'
+			name: 'Maya Otieno'
 		});
 	});
 
@@ -182,6 +181,28 @@ describe('authFlow', () => {
 			session: null,
 			error: 'Sign-in failed. Try again.'
 		});
+	});
+
+	it.each(['verifyCode', 'exchangeCode', 'refresh'] as const)('%s maps absent WorkOS names to null', async (flow) => {
+		const t = harness();
+		const result = tokens();
+		Reflect.deleteProperty(result.user, 'firstName');
+		Reflect.deleteProperty(result.user, 'lastName');
+		workos.authenticateWithMagicAuth.mockResolvedValueOnce(result);
+		workos.authenticateWithCode.mockResolvedValueOnce(result);
+		workos.authenticateWithRefreshToken.mockResolvedValueOnce(result);
+		const response = flow === 'verifyCode'
+			? (await t.action(api.authFlow.verifyCode, { email: 'maya@example.com', code: '123456' })).session
+			: flow === 'exchangeCode'
+				? (await t.action(api.authFlow.exchangeCode, { code: 'code' })).session
+				: await t.action(api.authFlow.refresh, { refreshToken: 'refresh' });
+		expect(response).toEqual({
+			accessToken: 'access-token', refreshToken: 'refresh-token',
+			email: 'maya@example.com', firstName: null, lastName: null
+		});
+		const users = await t.run(async (ctx) => ctx.db.query('users').collect());
+		expect(users).toHaveLength(flow === 'refresh' ? 0 : 1);
+		if (flow !== 'refresh') expect(users[0]?.name).toBe('maya@example.com');
 	});
 
 	it('refresh returns a new session or null, without writing users', async () => {

@@ -1,14 +1,12 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createCookie } from 'react-router';
 import { safeReturnTo } from './returnTo';
+import { sessionSecret } from './session.server';
 
 const MAX_AGE = 10 * 60;
 
 function stateCookie() {
-	const secret = process.env.SESSION_SECRET;
-	if (!secret || secret.length < 32) {
-		throw new Error('SESSION_SECRET must be set to at least 32 characters.');
-	}
+	const secret = sessionSecret();
 	const secure = process.env.NODE_ENV === 'production';
 	return createCookie(secure ? '__Host-gh_oauth_state' : 'gh_oauth_state', {
 		httpOnly: true,

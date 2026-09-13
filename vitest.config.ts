@@ -7,14 +7,7 @@ export default defineConfig({
 	},
 	test: {
 		setupFiles: ['./tests/setup/isolate-env.ts'],
-		exclude: [
-			'**/node_modules/**',
-			'**/build/**',
-			'**/dist/**',
-			'**/.react-router/**',
-			'**/tests/e2e/**',
-			'**/*.spec.ts'
-		],
+
 		projects: [
 			{
 				extends: true,

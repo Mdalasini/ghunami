@@ -1,7 +1,7 @@
 'use node';
 
 import { v } from 'convex/values';
-import { WorkOS } from '@workos-inc/node';
+import { WorkOS, type AuthenticationResponse } from '@workos-inc/node';
 import { internal } from './_generated/api';
 import { action } from './_generated/server';
 import type { ActionCtx } from './_generated/server';
@@ -28,6 +28,16 @@ const session = v.object({
 	lastName: v.union(v.string(), v.null())
 });
 
+function toSession(result: AuthenticationResponse) {
+	return {
+		accessToken: result.accessToken,
+		refreshToken: result.refreshToken,
+		email: result.user.email,
+		firstName: result.user.firstName ?? null,
+		lastName: result.user.lastName ?? null
+	};
+}
+
 /**
  * Records the verified identity. This is the only moment we hold an email WorkOS
  * has actually confirmed, so it is where the `users` row gets its email — the
@@ -36,14 +46,14 @@ const session = v.object({
 async function record(
 	ctx: ActionCtx,
 	clientId: string,
-	user: { id: string; email: string; firstName: string | null; lastName: string | null }
+	user: AuthenticationResponse['user']
 ): Promise<void> {
 	await ctx.runMutation(internal.users.upsertFromWorkOS, {
 		issuer: `https://api.workos.com/user_management/${clientId}`,
 		workosUserId: user.id,
 		email: user.email,
-		firstName: user.firstName,
-		lastName: user.lastName
+		firstName: user.firstName ?? null,
+		lastName: user.lastName ?? null
 	});
 }
 
@@ -108,22 +118,8 @@ export const verifyCode = action({
 				email: args.email.trim().toLowerCase(),
 				code: args.code.trim()
 			});
-			await record(ctx, clientId, {
-				id: result.user.id,
-				email: result.user.email,
-				firstName: result.user.firstName ?? null,
-				lastName: result.user.lastName ?? null
-			});
-			return {
-				session: {
-					accessToken: result.accessToken,
-					refreshToken: result.refreshToken,
-					email: result.user.email,
-					firstName: result.user.firstName ?? null,
-					lastName: result.user.lastName ?? null
-				},
-				error: null
-			};
+			await record(ctx, clientId, result.user);
+			return { session: toSession(result), error: null };
 		} catch (error) {
 			return {
 				session: null,
@@ -166,22 +162,8 @@ export const exchangeCode = action({
 				clientId,
 				code: args.code
 			});
-			await record(ctx, clientId, {
-				id: result.user.id,
-				email: result.user.email,
-				firstName: result.user.firstName ?? null,
-				lastName: result.user.lastName ?? null
-			});
-			return {
-				session: {
-					accessToken: result.accessToken,
-					refreshToken: result.refreshToken,
-					email: result.user.email,
-					firstName: result.user.firstName ?? null,
-					lastName: result.user.lastName ?? null
-				},
-				error: null
-			};
+			await record(ctx, clientId, result.user);
+			return { session: toSession(result), error: null };
 		} catch (error) {
 			return { session: null, error: message(error, 'Sign-in failed. Try again.') };
 		}
@@ -199,13 +181,7 @@ export const refresh = action({
 				clientId,
 				refreshToken: args.refreshToken
 			});
-			return {
-				accessToken: result.accessToken,
-				refreshToken: result.refreshToken,
-				email: result.user.email,
-				firstName: result.user.firstName ?? null,
-				lastName: result.user.lastName ?? null
-			};
+			return toSession(result);
 		} catch {
 			return null;
 		}

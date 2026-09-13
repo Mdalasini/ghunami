@@ -72,17 +72,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
 function Field({
 	label,
-	className = '',
-	style,
 	...props
 }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
 	return (
-		// className/style dress the bubble, not the input: the bubble carries the
-		// border, the focus state, and the reveal animation.
-		<label
-			style={style}
-			className={`block rounded-3xl border-2 border-line bg-card px-5 py-3 transition-colors focus-within:border-accent ${className}`}
-		>
+		<label className="block rounded-3xl border-2 border-line bg-card px-5 py-3 transition-colors focus-within:border-accent">
 			<span className="text-xs font-extrabold tracking-wider text-mute uppercase">{label}</span>
 			<input className="field-bare mt-1 text-base text-ink" {...props} />
 		</label>
@@ -172,8 +165,10 @@ export default function SignIn() {
 				busy={busy}
 				error={error}
 				onDigit={setDigit}
-				onClear={() => setDigits(Array(CODE_LENGTH).fill(''))}
-				onResend={send}
+				onResend={() => {
+					setDigits(Array(CODE_LENGTH).fill(''));
+					send();
+				}}
 			/>
 		);
 	}
@@ -287,7 +282,6 @@ function CodeStep({
 	busy,
 	error,
 	onDigit,
-	onClear,
 	onResend
 }: {
 	email: string;
@@ -296,7 +290,6 @@ function CodeStep({
 	busy: boolean;
 	error: string | null | undefined;
 	onDigit: (index: number, value: string) => void;
-	onClear: () => void;
 	onResend: () => void;
 }) {
 	return (
@@ -352,10 +345,7 @@ function CodeStep({
 			<div className="mt-2 flex flex-col items-center gap-1">
 				<button
 					type="button"
-					onClick={() => {
-						onClear();
-						onResend();
-					}}
+					onClick={onResend}
 					disabled={busy}
 					className="font-ui rounded-full px-4 py-2 text-sm font-extrabold text-accent hover:bg-sun disabled:text-mute"
 				>
