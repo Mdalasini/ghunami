@@ -240,9 +240,11 @@ describe('cover canvas processing', () => {
 		expect(document.createElement).not.toHaveBeenCalled();
 	});
 
-	it('re-encodes as JPEG when WebP silently produces PNG, stepping JPEG quality down', async () => {
+	it.each([16, MAX_COVER_OUTPUT_BYTES + 1])('switches immediately to JPEG when WebP produces a %i-byte PNG, stepping JPEG quality down', async (pngSize) => {
 		toBlob.mockImplementation((done: BlobCallback, type: string, quality: number) => {
-			const size = type === 'image/jpeg' && quality > 0.86 ? MAX_COVER_OUTPUT_BYTES + 1 : 16;
+			const size = type === 'image/webp'
+				? pngSize
+				: quality > 0.86 ? MAX_COVER_OUTPUT_BYTES + 1 : 16;
 			done(new Blob([new Uint8Array(size)], { type: type === 'image/webp' ? 'image/png' : type }));
 		});
 		const result = await encodeCoverCanvas(canvas as unknown as HTMLCanvasElement, 'photo.png');

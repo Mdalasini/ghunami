@@ -184,7 +184,7 @@ export async function pickEncodedBlob(
 	let blob!: Blob;
 	for (const quality of COVER_QUALITY_STEPS) {
 		blob = await encode(type, quality);
-		if (blob.size <= MAX_COVER_OUTPUT_BYTES) break;
+		if (blob.type !== type || blob.size <= MAX_COVER_OUTPUT_BYTES) break;
 	}
 	return blob;
 }
