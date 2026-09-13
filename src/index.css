@@ -227,11 +227,11 @@ textarea {
 }
 
 /*
- * Sending: instead of lowering, the tray gently shrinks and fades in place and is
- * gone before the bubble appears. Mirrored by TRAY_SENT_MS in CoverPhotoField.
+ * Sending: gently slide and fade before the bubble appears. Mirrored by TRAY_SENT_MS.
+ * Do not scale this tray: the cropper measures its container while reopening to restore the crop.
  */
 .cover-tray.is-sent {
-	transform: translateY(8px) scale(0.97);
+	transform: translateY(8px);
 	opacity: 0;
 	transition:
 		transform 300ms cubic-bezier(0.215, 0.61, 0.355, 1),
