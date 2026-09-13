@@ -10,7 +10,7 @@ import {
 } from 'react-router';
 import type { Route } from './+types/root';
 import { ConvexClientProvider } from './components/ConvexClientProvider';
-import { HorizonMark } from './components/Tip';
+import { HorizonDisc } from './components/Tip';
 import './index.css';
 
 export const links: Route.LinksFunction = () => [
@@ -47,12 +47,7 @@ export function Layout({ children }: { children: ReactNode }) {
 export function HydrateFallback() {
 	return (
 		<div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-paper">
-			<span
-				className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-ink text-card"
-				aria-hidden="true"
-			>
-				<HorizonMark className="h-6 w-auto" />
-			</span>
+			<HorizonDisc className="h-14 w-14 [&_svg]:h-6" />
 			<p className="text-sm font-extrabold tracking-wider text-mute uppercase">Loading</p>
 		</div>
 	);

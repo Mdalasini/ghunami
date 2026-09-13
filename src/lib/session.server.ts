@@ -16,14 +16,18 @@ export type Session = {
 const COOKIE = 'gh_session';
 const MAX_AGE = 60 * 60 * 24 * 30;
 
-function key(): Buffer {
+export function sessionSecret(): string {
 	const secret = process.env.SESSION_SECRET;
 	if (!secret || secret.length < 32) {
 		throw new Error(
 			'SESSION_SECRET must be set to at least 32 characters. Generate one with `openssl rand -base64 32`.'
 		);
 	}
-	return createHash('sha256').update(secret).digest();
+	return secret;
+}
+
+function key(): Buffer {
+	return createHash('sha256').update(sessionSecret()).digest();
 }
 
 function seal(session: Session): string {

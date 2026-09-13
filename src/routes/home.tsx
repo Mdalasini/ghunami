@@ -1,5 +1,4 @@
-import type { MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import logo from '../assets/logo.svg';
 import { AuthBar } from '../components/AuthBar';
 import { resetDraft } from '../lib/draft';
@@ -9,14 +8,6 @@ export function meta() {
 }
 
 export default function Home() {
-	const navigate = useNavigate();
-
-	function start(event: MouseEvent<HTMLAnchorElement>) {
-		event.preventDefault();
-		resetDraft();
-		void navigate('/create');
-	}
-
 	return (
 		<div className="min-h-dvh px-6 py-8 md:px-12">
 			<header className="flex items-center justify-between gap-4">
@@ -27,7 +18,7 @@ export default function Home() {
 					<AuthBar />
 					<Link
 						to="/create"
-						onClick={start}
+						onClick={resetDraft}
 						className="font-ui rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-sun"
 					>
 						Start a fundraiser
@@ -41,7 +32,7 @@ export default function Home() {
 				</h1>
 				<Link
 					to="/create"
-					onClick={start}
+					onClick={resetDraft}
 					className="btn-press mt-10 bg-accent px-8 text-card hover:bg-accent-deep"
 				>
 					Start a fundraiser

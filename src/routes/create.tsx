@@ -20,7 +20,7 @@ import {
 	type StoryFormats,
 	StoryToolbar
 } from '../components/StoryEditor';
-import { HorizonMark, Tip } from '../components/Tip';
+import { HorizonDisc, Tip } from '../components/Tip';
 import {
 	type CoverSnapshot,
 	clearCover,
@@ -64,14 +64,7 @@ type EditSnapshot = { goal: number | null; title: string; story: string; cover: 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function Avatar() {
-	return (
-		<span
-			className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink text-card"
-			aria-hidden="true"
-		>
-			<HorizonMark className="h-4 w-auto" />
-		</span>
-	);
+	return <HorizonDisc className="h-9 w-9 shrink-0" />;
 }
 
 /* A run of received bubbles. The avatar sits at the bottom like a thread, and the last bubble gets the tail. */
@@ -210,9 +203,6 @@ export default function Create() {
 	const [done, setDone] = useState(false);
 	const [typing, setTyping] = useState(false);
 	const [sending, setSending] = useState(false);
-	const [goalText, setGoalText] = useState(() =>
-		draft.goal !== null ? draft.goal.toLocaleString('en-KE') : ''
-	);
 	const [coverReady, setCoverReady] = useState(() => getDraft().coverUrl !== '');
 	const [coverBusy, setCoverBusy] = useState(false);
 	const [coverCropping, setCoverCropping] = useState(false);
@@ -364,17 +354,14 @@ export default function Create() {
 		const digits = value.replace(/[^\d]/g, '');
 		if (!digits) {
 			patchDraft({ goal: null });
-			setGoalText('');
 			return;
 		}
 		const amount = Number(digits);
 		patchDraft({ goal: amount > 0 ? amount : null });
-		setGoalText(amount.toLocaleString('en-KE'));
 	}
 
 	function pickSuggested(amount: number) {
 		patchDraft({ goal: amount });
-		setGoalText(amount.toLocaleString('en-KE'));
 		fieldRef.current?.focus({ preventScroll: true });
 	}
 
@@ -408,7 +395,6 @@ export default function Create() {
 		if (!snapshot) return;
 		if (n === 1) {
 			patchDraft({ goal: snapshot.goal });
-			setGoalText(snapshot.goal !== null ? snapshot.goal.toLocaleString('en-KE') : '');
 		} else if (n === 3) {
 			patchDraft({ title: snapshot.title });
 		} else if (n === 4) {
@@ -486,7 +472,6 @@ export default function Create() {
 	function startOver() {
 		replyId.current += 1;
 		resetDraft();
-		setGoalText('');
 		setCoverReady(false);
 		setCoverBusy(false);
 		setCoverCropping(false);
@@ -504,14 +489,6 @@ export default function Create() {
 		if (event.shiftKey) return;
 		event.preventDefault();
 		if (!event.ctrlKey && !event.metaKey && !event.altKey) {
-			void goNext();
-		}
-	}
-
-	function onTitleKeydown(event: KeyboardEvent<HTMLInputElement>) {
-		if (event.key !== 'Enter') return;
-		event.preventDefault();
-		if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
 			void goNext();
 		}
 	}
@@ -653,12 +630,7 @@ export default function Create() {
 							</svg>
 						</Link>
 						<div className="flex flex-col items-center gap-1">
-							<span
-								className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-ink text-card"
-								aria-hidden="true"
-							>
-								<HorizonMark className="h-4 w-auto" />
-							</span>
+							<HorizonDisc className="h-10 w-10" />
 							<p className="text-sm font-extrabold">Ghunami</p>
 							<p className="text-xs font-medium text-mute" aria-live="polite">
 								{done ? 'Draft saved' : editing !== null ? `Editing ${activeStep.label}` : `Step ${step} of ${LAST}`}
@@ -880,7 +852,7 @@ export default function Create() {
 												inputMode="numeric"
 												autoComplete="off"
 												placeholder="0"
-												value={goalText}
+												value={draft.goal?.toLocaleString('en-KE') ?? ''}
 												onChange={onGoalInput}
 												onKeyDown={onGoalKeydown}
 												disabled={replying}
@@ -905,7 +877,7 @@ export default function Create() {
 												placeholder="Help Maya get home"
 												value={draft.title}
 												onChange={(event) => patchDraft({ title: event.currentTarget.value })}
-												onKeyDown={onTitleKeydown}
+												onKeyDown={onEnter}
 												disabled={replying}
 											/>
 										</label>

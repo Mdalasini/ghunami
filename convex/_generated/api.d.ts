@@ -10,7 +10,7 @@
 
 import type * as authFlow from "../authFlow.js";
 import type * as lib_auth from "../lib/auth.js";
-import type * as lib_customFunctions from "../lib/customFunctions.js";
+import type * as migrations from "../migrations.js";
 import type * as users from "../users.js";
 
 import type {
@@ -22,7 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   authFlow: typeof authFlow;
   "lib/auth": typeof lib_auth;
-  "lib/customFunctions": typeof lib_customFunctions;
+  migrations: typeof migrations;
   users: typeof users;
 }>;
 

@@ -10,6 +10,17 @@ export function HorizonMark({ className }: { className: string }) {
 	);
 }
 
+export function HorizonDisc({ className }: { className: string }) {
+	return (
+		<span
+			className={`inline-flex items-center justify-center rounded-full bg-ink text-card ${className}`}
+			aria-hidden="true"
+		>
+			<HorizonMark className="h-4 w-auto" />
+		</span>
+	);
+}
+
 /* A received-side helper bubble. Render it inside a message group; the group draws the avatar. */
 export function Tip({ title, children }: { title: string; children: ReactNode }) {
 	return (

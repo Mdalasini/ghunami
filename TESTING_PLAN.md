@@ -54,18 +54,17 @@ Use a test-only secret and restore environment variables after each test. Cover 
 
 ## Phase 2: Convex function coverage without a deployment
 
-Read `convex/schema.ts`, `convex/users.ts`, `convex/lib/auth.ts`, and `convex/lib/customFunctions.ts` before writing tests. Follow the installed `convex-test` documentation for loading generated references and function modules. Use a fresh in-memory harness for each test and simulated identities, not WorkOS tokens.
+Read `convex/schema.ts`, `convex/users.ts`, `convex/lib/auth.ts`, and `convex/migrations.ts` before writing tests. Follow the installed `convex-test` documentation for loading generated references and function modules. Use a fresh in-memory harness for each test and simulated identities, not WorkOS tokens.
 
 Cover:
 
 - `users.me`: unauthenticated/missing user returns null; an existing identity gets its own public user fields, not another user's record.
-- `users.storeUser`: unauthenticated rejection; new users default to role `user`; email normalization; repeated calls reuse the same record.
-- Existing verified name/email survive missing identity claims, matching the comments in `storeUser`.
-- Updating an existing admin does not accidentally demote them or create a second record.
+- User writes omit deprecated role, picture, and application timestamp fields.
+- The legacy-field migration preserves identity and public fields, paginates, and is idempotent.
 - `internal.users.upsertFromWorkOS`: issuer/subject identity mapping, normalized email, full-name/email fallback, and updating instead of duplicating an existing identity.
 - Distinct identities remain separate even if their email matches; identity lookup currently uses the token identifier.
 
-Inspect role-check helpers and test any actual authorization behavior present. Do not invent admin UI or permissions. In-memory fixtures need no persisted seed data or dashboard setup.
+Test actual authorization behavior present; unused role-check helpers have been removed. Do not invent admin UI or permissions. In-memory fixtures need no persisted seed data or dashboard setup.
 
 ## Phase 3: Server authentication route tests
 

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { heicTo, isHeic } from 'heic-to';
 import {
 	assessCropResolution,
 	coverZoomLimit,
@@ -18,9 +19,21 @@ import {
 	MAX_COVER_UPLOAD_BYTES,
 	percentCropToPixels,
 	pickEncodedBlob,
-	preferredCoverMimeType,
+	encodeCoverCanvas,
+	processCoverCrop,
+	decodeCoverImage,
+	releaseDecodedCover,
+	COVER_QUALITY_STEPS,
 	validateCoverFile
 } from '../../src/lib/coverImage';
+
+vi.mock('heic-to', () => ({ heicTo: vi.fn(), isHeic: vi.fn() }));
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+	vi.resetAllMocks();
+});
 
 function file(name: string, type: string, size = 32): File {
 	return new File([new Uint8Array(size)], name, { type });
@@ -177,30 +190,27 @@ describe('crop resolution', () => {
 
 describe('cover encoding helpers', () => {
 	it('steps quality down until the blob is under 1 MB, without going below the floor', async () => {
-		const encode = async (_type: string, quality: number) => {
+		const encode = vi.fn(async (_type: string, quality: number) => {
 			const size =
 				quality >= 0.9 ? MAX_COVER_OUTPUT_BYTES + 400_000 : MAX_COVER_OUTPUT_BYTES - 50_000;
 			return new Blob([new Uint8Array(size)], { type: 'image/jpeg' });
-		};
+		});
 
 		const picked = await pickEncodedBlob(encode, 'image/jpeg');
-		expect(picked.quality).toBe(0.86);
-		expect(picked.blob.size).toBeLessThanOrEqual(MAX_COVER_OUTPUT_BYTES);
+		expect(encode.mock.calls).toEqual([['image/jpeg', 0.92], ['image/jpeg', 0.86]]);
+		expect(picked.size).toBeLessThanOrEqual(MAX_COVER_OUTPUT_BYTES);
 	});
 
 	it('keeps the quality floor when every step is still over 1 MB', async () => {
-		const encode = async () =>
-			new Blob([new Uint8Array(MAX_COVER_OUTPUT_BYTES + 1)], { type: 'image/webp' });
+		const encode = vi.fn(async () =>
+			new Blob([new Uint8Array(MAX_COVER_OUTPUT_BYTES + 1)], { type: 'image/webp' }));
 
 		const picked = await pickEncodedBlob(encode, 'image/webp');
-		expect(picked.quality).toBe(COVER_QUALITY_FLOOR);
-		expect(picked.blob.size).toBeGreaterThan(MAX_COVER_OUTPUT_BYTES);
+		expect(encode).toHaveBeenCalledTimes(COVER_QUALITY_STEPS.length);
+		expect(encode).toHaveBeenLastCalledWith('image/webp', COVER_QUALITY_FLOOR);
+		expect(picked.size).toBeGreaterThan(MAX_COVER_OUTPUT_BYTES);
 	});
 
-	it('prefers WebP when the canvas encoder reports support', () => {
-		expect(preferredCoverMimeType(() => true)).toBe('image/webp');
-		expect(preferredCoverMimeType(() => false)).toBe('image/jpeg');
-	});
 
 	it('renames the output to match the encoded type', () => {
 		expect(coverFileName('Holiday.HEIC', 'image/jpeg')).toBe('Holiday.jpg');
@@ -209,59 +219,155 @@ describe('cover encoding helpers', () => {
 	});
 });
 
+describe('cover canvas processing', () => {
+	const context = { clearRect: vi.fn(), drawImage: vi.fn() };
+	const toBlob = vi.fn();
+	const canvas = { width: 0, height: 0, getContext: vi.fn(), toBlob };
+	const bitmap = { width: 2000, height: 2500, close: vi.fn() } as unknown as ImageBitmap;
+
+	beforeEach(() => {
+		canvas.getContext.mockReturnValue(context);
+		toBlob.mockImplementation((done: BlobCallback, type: string) => done(new Blob(['encoded'], { type })));
+		vi.stubGlobal('document', { createElement: vi.fn().mockReturnValue(canvas) });
+	});
+
+	it('encodes WebP directly without a support probe', async () => {
+		const result = await encodeCoverCanvas(canvas as unknown as HTMLCanvasElement, 'photo.heic');
+		expect(result).toBeInstanceOf(File);
+		expect(result.name).toBe('photo.webp');
+		expect(result.type).toBe('image/webp');
+		expect(toBlob).toHaveBeenCalledExactlyOnceWith(expect.any(Function), 'image/webp', 0.92);
+		expect(document.createElement).not.toHaveBeenCalled();
+	});
+
+	it.each([16, MAX_COVER_OUTPUT_BYTES + 1])('switches immediately to JPEG when WebP produces a %i-byte PNG, stepping JPEG quality down', async (pngSize) => {
+		toBlob.mockImplementation((done: BlobCallback, type: string, quality: number) => {
+			const size = type === 'image/webp'
+				? pngSize
+				: quality > 0.86 ? MAX_COVER_OUTPUT_BYTES + 1 : 16;
+			done(new Blob([new Uint8Array(size)], { type: type === 'image/webp' ? 'image/png' : type }));
+		});
+		const result = await encodeCoverCanvas(canvas as unknown as HTMLCanvasElement, 'photo.png');
+		expect(result.name).toBe('photo.jpg');
+		expect(result.type).toBe('image/jpeg');
+		expect(result.size).toBe(16);
+		expect(toBlob.mock.calls.map(([, type, quality]) => [type, quality])).toEqual([
+			['image/webp', 0.92], ['image/jpeg', 0.92], ['image/jpeg', 0.86]
+		]);
+	});
+
+	it('rejects a null encoded blob', async () => {
+		toBlob.mockImplementation((done: BlobCallback) => done(null));
+		await expect(encodeCoverCanvas(canvas as unknown as HTMLCanvasElement, 'photo.jpg')).rejects.toThrow(COVER_MESSAGES.encodeFailed);
+	});
+
+	it('returns the file directly and draws original pixels at the fixed output size', async () => {
+		const result = await processCoverCrop(bitmap, { x: 10, y: 20, width: 50, height: 50 }, 'photo.jpg');
+		expect(result).toBeInstanceOf(File);
+		expect(canvas.width).toBe(1080);
+		expect(canvas.height).toBe(1350);
+		expect(context.drawImage).toHaveBeenCalledWith(bitmap, 200, 500, 1000, 1250, 0, 0, 1080, 1350);
+	});
+
+	it('blocks an undersized clamped crop before allocating a canvas', async () => {
+		await expect(processCoverCrop(bitmap, { x: 90, y: 90, width: 50, height: 50 }, 'photo.jpg')).rejects.toThrow(COVER_MESSAGES.tooSmall);
+		expect(document.createElement).not.toHaveBeenCalled();
+	});
+
+	it('still accepts a soft crop at the minimum resolution', async () => {
+		await expect(processCoverCrop(bitmap, { x: 0, y: 0, width: 27, height: 27 }, 'photo.jpg')).resolves.toBeInstanceOf(File);
+	});
+
+	it('rejects a missing canvas context', async () => {
+		canvas.getContext.mockReturnValue(null);
+		await expect(processCoverCrop(bitmap, { x: 0, y: 0, width: 100, height: 100 }, 'photo.jpg')).rejects.toThrow(COVER_MESSAGES.encodeFailed);
+	});
+
+	it('closes the decoded bitmap if preview encoding fails', async () => {
+		vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap));
+		toBlob.mockImplementation((done: BlobCallback) => done(null));
+		await expect(decodeCoverImage(file('photo.jpg', 'image/jpeg'))).rejects.toThrow(COVER_MESSAGES.encodeFailed);
+		expect(bitmap.close).toHaveBeenCalledOnce();
+	});
+
+	it('revokes the preview URL and tolerates an already closed bitmap', () => {
+		const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+		vi.mocked(bitmap.close).mockImplementation(() => { throw new Error('already closed'); });
+		expect(() => releaseDecodedCover({ bitmap, previewUrl: 'blob:preview', width: 2000, height: 2500 })).not.toThrow();
+		expect(revoke).toHaveBeenCalledWith('blob:preview');
+	});
+});
+
 describe('HEIC decode fallback', () => {
 	const bitmap = { width: 8, height: 10 } as ImageBitmap;
+	const createBitmap = vi.fn();
 
-	it('converts HEIC when native decode fails', async () => {
-		const convertHeic = vi.fn().mockResolvedValue(bitmap);
-		const result = await bitmapFromCoverFile(file('IMG_0001.HEIC', 'image/heic'), {
-			createBitmap: async () => {
-				throw new Error('browser cannot decode HEIC');
-			},
-			convertHeic,
-			detectHeic: async () => false
+	beforeEach(() => {
+		vi.stubGlobal('createImageBitmap', createBitmap);
+		createBitmap.mockRejectedValue(new Error('native decode failed'));
+		vi.mocked<(options: { blob: Blob; type: 'bitmap' }) => Promise<ImageBitmap>>(heicTo).mockResolvedValue(bitmap);
+		vi.mocked(isHeic).mockResolvedValue(false);
+	});
+
+	it('prefers native oriented decoding without HEIC detection or conversion', async () => {
+		createBitmap.mockResolvedValue(bitmap);
+		const input = file('photo.heic', 'image/heic');
+		expect(await bitmapFromCoverFile(input)).toBe(bitmap);
+		expect(createBitmap).toHaveBeenCalledWith(input, { imageOrientation: 'from-image' });
+		expect(isHeic).not.toHaveBeenCalled();
+		expect(heicTo).not.toHaveBeenCalled();
+	});
+
+	it('retries native decoding without orientation options', async () => {
+		createBitmap.mockReset().mockRejectedValueOnce(new Error('unsupported options')).mockResolvedValueOnce(bitmap);
+		const input = file('photo.jpg', 'image/jpeg');
+		expect(await bitmapFromCoverFile(input)).toBe(bitmap);
+		expect(createBitmap.mock.calls).toEqual([[input, { imageOrientation: 'from-image' }], [input]]);
+		expect(heicTo).not.toHaveBeenCalled();
+	});
+
+	it('converts HEIC when both native decode attempts fail', async () => {
+		const input = file('IMG_0001.HEIC', 'image/heic');
+		expect(await bitmapFromCoverFile(input)).toBe(bitmap);
+		expect(createBitmap).toHaveBeenCalledTimes(2);
+		expect(heicTo).toHaveBeenCalledExactlyOnceWith({
+			blob: input, type: 'bitmap', options: { imageOrientation: 'from-image' }
 		});
-		expect(convertHeic).toHaveBeenCalledTimes(1);
-		expect(result).toBe(bitmap);
+		expect(isHeic).not.toHaveBeenCalled();
 	});
 
 	it('uses magic-byte detection when type and extension are missing', async () => {
-		const convertHeic = vi.fn().mockResolvedValue(bitmap);
-		await bitmapFromCoverFile(file('IMG_0001', ''), {
-			createBitmap: async () => {
-				throw new Error('not a jpeg');
-			},
-			convertHeic,
-			detectHeic: async () => true
-		});
-		expect(convertHeic).toHaveBeenCalledTimes(1);
+		vi.mocked(isHeic).mockResolvedValue(true);
+		const input = file('IMG_0001', '');
+		expect(await bitmapFromCoverFile(input)).toBe(bitmap);
+		expect(isHeic).toHaveBeenCalledWith(input);
+		expect(heicTo).toHaveBeenCalledTimes(1);
+	});
+
+	it('falls back to an oriented JPEG when HEIC bitmap conversion fails', async () => {
+		const jpeg = new Blob(['jpeg'], { type: 'image/jpeg' });
+		vi.mocked(heicTo).mockRejectedValueOnce(new Error('bitmap conversion failed')).mockResolvedValueOnce(jpeg);
+		createBitmap.mockRejectedValueOnce(new Error('native failed')).mockRejectedValueOnce(new Error('native failed')).mockResolvedValueOnce(bitmap);
+		const input = file('photo.heic', 'image/heic');
+		expect(await bitmapFromCoverFile(input)).toBe(bitmap);
+		expect(heicTo).toHaveBeenLastCalledWith({ blob: input, type: 'image/jpeg', quality: 0.92 });
+		expect(createBitmap).toHaveBeenLastCalledWith(jpeg, { imageOrientation: 'from-image' });
 	});
 
 	it('does not convert a failed JPEG unless it is detected as HEIC', async () => {
-		const convertHeic = vi.fn();
-		await expect(
-			bitmapFromCoverFile(file('broken.jpg', 'image/jpeg'), {
-				createBitmap: async () => {
-					throw new Error('bad jpeg');
-				},
-				convertHeic,
-				detectHeic: async () => false
-			})
-		).rejects.toThrow(COVER_MESSAGES.unreadable);
-		expect(convertHeic).not.toHaveBeenCalled();
+		await expect(bitmapFromCoverFile(file('broken.jpg', 'image/jpeg'))).rejects.toThrow(COVER_MESSAGES.unreadable);
+		expect(heicTo).not.toHaveBeenCalled();
+	});
+
+	it('handles failed HEIC detection as an unreadable image', async () => {
+		vi.mocked(isHeic).mockRejectedValue(new Error('detection failed'));
+		await expect(bitmapFromCoverFile(file('broken.jpg', 'image/jpeg'))).rejects.toThrow(COVER_MESSAGES.unreadable);
+		expect(heicTo).not.toHaveBeenCalled();
 	});
 
 	it('surfaces a readable error when HEIC conversion also fails', async () => {
-		await expect(
-			bitmapFromCoverFile(file('bad.heic', 'image/heic'), {
-				createBitmap: async () => {
-					throw new Error('no native heic');
-				},
-				convertHeic: async () => {
-					throw new Error('wasm failed');
-				},
-				detectHeic: async () => true
-			})
-		).rejects.toThrow(COVER_MESSAGES.unreadable);
+		vi.mocked(heicTo).mockRejectedValue(new Error('wasm failed'));
+		await expect(bitmapFromCoverFile(file('bad.heic', 'image/heic'))).rejects.toThrow(COVER_MESSAGES.unreadable);
+		expect(heicTo).toHaveBeenCalledTimes(2);
 	});
 });
