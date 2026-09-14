@@ -8,7 +8,8 @@ import {
 	useState,
 	useSyncExternalStore
 } from 'react';
-import { Link, useNavigate, useSearchParams, type LoaderFunctionArgs } from 'react-router';
+import { Link, redirect, useNavigate, useSearchParams, type LoaderFunctionArgs } from 'react-router';
+import { isFundID } from '../../convex/lib/fundId';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { TITLE_MAX } from '../../convex/lib/fundFields';
@@ -118,7 +119,10 @@ export function meta() {
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	requireSession(request);
-	return null;
+	const fundID = new URL(request.url).searchParams.get('fundID');
+	if (!fundID) return null;
+	if (!isFundID(fundID)) throw new Response('Not found', { status: 404 });
+	throw redirect(`/preview/${fundID}`);
 }
 
 export default function Create() {
