@@ -1,11 +1,11 @@
 import { useEffect, type ReactNode } from 'react';
-import { useConvexAuth } from 'convex/react';
 import { useLocation, useNavigate } from 'react-router';
 import { HorizonDisc } from './HorizonMark';
+import { useSessionAuth } from './ConvexClientProvider';
 import { safeReturnTo } from '../lib/returnTo';
 
 export function AuthGate({ children }: { children: ReactNode }) {
-	const { isLoading, isAuthenticated } = useConvexAuth();
+	const { isLoading, isAuthenticated } = useSessionAuth();
 	const navigate = useNavigate();
 	const location = useLocation();
 
