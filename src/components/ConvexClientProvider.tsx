@@ -1,5 +1,5 @@
 import { ConvexProviderWithAuth } from 'convex/react';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useFetchers, useLocation } from 'react-router';
 
 import { DraftIsolation } from './DraftIsolation';
@@ -81,11 +81,14 @@ function useServerAuth() {
 		[]
 	);
 
-	return {
-		isLoading: token === undefined,
-		isAuthenticated: token != null,
-		fetchAccessToken
-	};
+	return useMemo(
+		() => ({
+			isLoading: token === undefined,
+			isAuthenticated: token != null,
+			fetchAccessToken
+		}),
+		[token, fetchAccessToken]
+	);
 }
 
 const SessionAuth = createContext<ReturnType<typeof useServerAuth> | null>(null);
@@ -103,9 +106,10 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
 
 function SessionAuthTree({ children }: { children: ReactNode }) {
 	const auth = useServerAuth();
+	const useAuth = useCallback(() => auth, [auth]);
 	return (
 		<SessionAuth.Provider value={auth}>
-			<ConvexProviderWithAuth client={convex} useAuth={() => auth}>
+			<ConvexProviderWithAuth client={convex} useAuth={useAuth}>
 				<DraftIsolation />
 				{children}
 			</ConvexProviderWithAuth>
