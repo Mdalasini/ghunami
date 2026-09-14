@@ -9,7 +9,6 @@ import {
 	useSyncExternalStore
 } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { CoverImage } from '../components/CoverImage';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import {
 	PLAIN_FORMATS,
@@ -19,37 +18,31 @@ import {
 	StoryToolbar
 } from '../components/StoryEditor';
 import { HorizonDisc } from '../components/HorizonMark';
-import { clearCover, formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
+import { clearCover, formatGoal, getDraft, patchDraft, subscribeDraft } from '../lib/draft';
 import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
 
 const STEPS = [
 	{
 		q: 'Fundraising goal',
-		sub: 'Pick a starting number for your goal. You can update this later as things change.',
-		label: 'Goal'
+		sub: 'Pick a starting number for your goal. You can update this later as things change.'
 	},
 	{
 		q: 'Cover image',
-		sub: 'A clear photo of the person or place helps more than a logo. Use a clear, bright photo. If possible, pick one from a happier time.',
-		label: 'Cover'
+		sub: 'A clear photo of the person or place helps more than a logo. Use a clear, bright photo. If possible, pick one from a happier time.'
 	},
 	{
 		q: 'Fundraiser title',
-		sub: 'Say who it’s for and the action, like “Help Maya get home”. A good title mentions who or what it’s for, and the action.',
-		label: 'Title'
+		sub: 'Say who it’s for and the action, like “Help Maya get home”. A good title mentions who or what it’s for, and the action.'
 	},
 	{
 		q: 'Fundraiser story',
-		sub: 'Use plain words. Explain who it’s for, and what the money does.',
-		label: 'Story'
-	},
-	{ q: 'Does this look right?', sub: 'Choose any answer to change it.', label: 'Review' }
+		sub: 'Use plain words. Explain who it’s for, and what the money does.'
+	}
 ] as const;
 
 const LAST = STEPS.length;
 const TITLE_MAX = 80;
 const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
-const SKIP_COVER_MESSAGE = 'I’ll return to this later';
 
 type Direction = 'forward' | 'back';
 
@@ -114,37 +107,6 @@ function Question({ n, q, sub }: { n: number; q: string; sub: string }) {
 	);
 }
 
-/* One row of the review card. Pressing it jumps back to that question. */
-function Answer({
-	n,
-	label,
-	onEdit,
-	children
-}: {
-	n: number;
-	label: string;
-	onEdit: (n: number) => void;
-	children: ReactNode;
-}) {
-	return (
-		<button
-			type="button"
-			data-answer={n}
-			className="flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-sun/40 focus-visible:bg-sun/40 focus-visible:outline-0"
-			aria-label={`Change your answer to step ${n}`}
-			onClick={() => onEdit(n)}
-		>
-			<span className="w-14 shrink-0 text-xs font-extrabold tracking-wider text-hint uppercase" aria-hidden="true">
-				{label}
-			</span>
-			<span className="min-w-0 flex-1">{children}</span>
-			<span className="shrink-0 text-accent" aria-hidden="true">
-				<Chevron direction="right" />
-			</span>
-		</button>
-	);
-}
-
 export function meta() {
 	return [{ title: 'Start a fundraiser · Ghunami' }];
 }
@@ -152,17 +114,15 @@ export function meta() {
 export default function Create() {
 	const draft = useSyncExternalStore(subscribeDraft, getDraft, getDraft);
 	const navigate = useNavigate();
-		const [searchParams] = useSearchParams();
-		const requestedStep = Number(searchParams.get('step'));
-		const [step, setStep] = useState(() =>
-			draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
-				? requestedStep : 1
-		);
-		const [returnToPreview, setReturnToPreview] = useState(searchParams.get('from') === 'preview');
+	const [searchParams] = useSearchParams();
+	const requestedStep = Number(searchParams.get('step'));
+	const [step, setStep] = useState(() =>
+		draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
+			? requestedStep : 1
+	);
+	const [returnToPreview, setReturnToPreview] = useState(searchParams.get('from') === 'preview');
 	const [direction, setDirection] = useState<Direction>('forward');
-	const [done, setDone] = useState(false);
-	/* Set when a question was opened from the review, so the next answer returns there. */
-	const [returnToReview, setReturnToReview] = useState(false);
+
 	const [goalText, setGoalText] = useState(() =>
 		draft.goal !== null ? draft.goal.toLocaleString('en-KE') : ''
 	);
@@ -185,14 +145,12 @@ export default function Create() {
 		(step === 1 && draft.goal !== null && draft.goal > 0) ||
 		(step === 2 && coverReady) ||
 		(step === 3 && draft.title.trim().length > 0) ||
-		(step === 4 && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX) ||
-		step === LAST;
+		(step === 4 && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX);
 
 	const busy = coverBusy;
 
 	/* Each question arrives with the field ready to type into. */
 	useEffect(() => {
-		if (done) return;
 		if (step === 4) {
 			storyRef.current?.focus();
 			return;
@@ -201,16 +159,13 @@ export default function Create() {
 			if (coverReady) okRef.current?.focus({ preventScroll: true });
 			return;
 		}
-		if (step === LAST) {
-			okRef.current?.focus({ preventScroll: true });
-			return;
-		}
+
 		fieldRef.current?.focus({ preventScroll: true });
-	}, [step, done, coverReady]);
+	}, [step, coverReady]);
 
 	useEffect(() => {
 		window.scrollTo({ top: 0, behavior: 'instant' });
-	}, [step, done]);
+	}, [step]);
 
 	const onStoryFormats = useCallback((formats: StoryFormats) => setStoryFormats(formats), []);
 
@@ -234,40 +189,25 @@ export default function Create() {
 
 	function show(n: number) {
 		setDirection(n > step ? 'forward' : 'back');
-		setDone(false);
 		setStep(n);
 	}
 
-	/* Open an earlier question from the review; answering it comes straight back here. */
-	function edit(n: number) {
-		if (busy) return;
-		setReturnToReview(true);
-		show(n);
-	}
-
 	function advance() {
-		if (returnToPreview || (step === 4 && !returnToReview)) {
+		if (returnToPreview || step === LAST) {
 			navigate('/create/preview');
 			return;
 		}
-		if (returnToReview) {
-			setReturnToReview(false);
-			show(LAST);
-			return;
-		}
+
 		show(step + 1);
 	}
 
 	async function goNext() {
-		if (!canContinue || busy || done) return;
+		if (!canContinue || busy) return;
 		if (step === 2 && coverField.current) {
 			const confirmed = await coverField.current.confirm();
 			if (!confirmed) return;
 		}
-		if (step >= LAST) {
-			setDone(true);
-			return;
-		}
+
 		advance();
 	}
 
@@ -280,23 +220,15 @@ export default function Create() {
 
 	function goBack() {
 		if (busy) return;
-		if (done) {
-			setDone(false);
-			return;
-		}
-		if (step === LAST) {
-			navigate('/create/preview');
-			return;
-		}
+
 		if (step > 1) {
 			setReturnToPreview(false);
-			setReturnToReview(false);
 			show(step - 1);
 		}
 	}
 
 	/* The down arrow is OK without the button: a skipped cover still counts as answered. */
-	const canGoForward = !busy && !done && step < LAST && (canContinue || (step === 2 && draft.coverSkipped));
+	const canGoForward = !busy && (canContinue || (step === 2 && draft.coverSkipped));
 
 	function goForward() {
 		if (!canGoForward) return;
@@ -305,18 +237,6 @@ export default function Create() {
 			return;
 		}
 		void goNext();
-	}
-
-	function startOver() {
-		resetDraft();
-		setGoalText('');
-		setCoverReady(false);
-		setCoverBusy(false);
-		setDone(false);
-		setReturnToPreview(false);
-		setReturnToReview(false);
-		setDirection('forward');
-		setStep(1);
 	}
 
 	function onStoryKeydown(event: KeyboardEvent<HTMLElement>) {
@@ -355,7 +275,7 @@ export default function Create() {
 		void goNext();
 	}
 
-	const progress = done ? 100 : ((step - 1) / LAST) * 100;
+	const progress = ((step - 1) / LAST) * 100;
 	const showSkip = step === 2 && !coverReady && !busy;
 	const underline =
 		'border-b-2 border-line pb-2 transition-colors duration-150 focus-within:border-accent';
@@ -459,26 +379,7 @@ export default function Create() {
 				</>
 			);
 		}
-		return (
-			<div className="divide-y-2 divide-line overflow-hidden rounded-3xl border-2 border-line bg-card">
-				<Answer n={2} label="Cover" onEdit={edit}>
-					{draft.coverUrl ? (
-						<CoverImage src={draft.coverUrl} alt="Your cover" className="w-24 rounded-xl" />
-					) : (
-						<span className="text-base font-medium text-mute">{SKIP_COVER_MESSAGE}</span>
-					)}
-				</Answer>
-				<Answer n={1} label="Goal" onEdit={edit}>
-					<span className="text-lg font-bold">{draft.goal !== null ? formatGoal(draft.goal) : ''}</span>
-				</Answer>
-				<Answer n={3} label="Title" onEdit={edit}>
-					<span className="text-lg font-bold wrap-break-word">{draft.title}</span>
-				</Answer>
-				<Answer n={4} label="Story" onEdit={edit}>
-					<div className="story-rich leading-relaxed" dangerouslySetInnerHTML={{ __html: draft.story }} />
-				</Answer>
-			</div>
-		);
+		return null;
 	}
 
 	return (
@@ -516,95 +417,58 @@ export default function Create() {
 			</header>
 
 			<main className="mx-auto flex w-full max-w-[44rem] flex-1 flex-col justify-center px-6 py-10 md:py-16">
-				{done ? (
-					<div key="done" className="slide-forward flex flex-col gap-8">
-						<div className="flex items-start gap-3">
-							<span
-								className="mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-card"
-								aria-hidden="true"
-							>
-								<Check className="h-4 w-4" />
-							</span>
-							<div>
-								<h1 className="text-2xl leading-[1.15] font-extrabold tracking-[-0.02em] md:text-3xl">
-									Saved in this browser
-								</h1>
-								<p className="mt-2 text-base text-mute md:text-lg">Nothing is public yet. This is your draft.</p>
-							</div>
-						</div>
-						<div className="flex flex-wrap items-center gap-3">
-							<Link
-								to="/create"
-								className="btn-press bg-accent text-card hover:bg-accent-deep"
-								onClick={startOver}
-							>
-								Start another
-							</Link>
+				<form
+					key={step}
+					className={`${direction === 'forward' ? 'slide-forward' : 'slide-back'} flex flex-col gap-8`}
+					onKeyDown={onFormKeydown}
+					onSubmit={(event) => {
+						event.preventDefault();
+						void goNext();
+					}}
+				>
+					<Question n={step} q={current.q} sub={current.sub} />
+
+					<div className="pl-0 md:pl-11">{field()}</div>
+
+					<div className="flex flex-wrap items-center gap-4 pl-0 md:pl-11">
+						<button
+							ref={okRef}
+							type="submit"
+							className={`btn-press min-w-28 gap-2 ${
+								!canContinue || busy ? 'bg-line text-mute' : 'bg-accent text-card hover:bg-accent-deep'
+							}`}
+							disabled={!canContinue || busy}
+						>
+							{step === LAST ? 'Preview fund' : 'OK'}
+							<Check className="h-4 w-4" />
+						</button>
+						<span className="text-xs font-medium text-hint">
+							press <Key>Enter ↵</Key>
+						</span>
+						{showSkip && (
 							<button
 								type="button"
-								className="btn-press border-2 border-line bg-card text-mute [--btn-edge:var(--color-line)] hover:text-ink"
-								onClick={goBack}
+								className="ml-auto rounded-full px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:bg-card"
+								onClick={skipCover}
 							>
-								Back
+								Skip for now
 							</button>
-						</div>
+						)}
 					</div>
-				) : (
-					<form
-						key={step}
-						className={`${direction === 'forward' ? 'slide-forward' : 'slide-back'} flex flex-col gap-8`}
-						onKeyDown={onFormKeydown}
-						onSubmit={(event) => {
-							event.preventDefault();
-							void goNext();
-						}}
-					>
-						<Question n={step} q={current.q} sub={current.sub} />
-
-						<div className="pl-0 md:pl-11">{field()}</div>
-
-						<div className="flex flex-wrap items-center gap-4 pl-0 md:pl-11">
-							<button
-								ref={okRef}
-								type="submit"
-								className={`btn-press min-w-28 gap-2 ${
-									!canContinue || busy ? 'bg-line text-mute' : 'bg-accent text-card hover:bg-accent-deep'
-								}`}
-								disabled={!canContinue || busy}
-							>
-								{step === LAST ? 'Looks good' : step === 4 ? 'Preview fund' : 'OK'}
-								{step !== LAST && <Check className="h-4 w-4" />}
-							</button>
-							{step !== LAST && (
-								<span className="text-xs font-medium text-hint">
-									press <Key>Enter ↵</Key>
-								</span>
-							)}
-							{showSkip && (
-								<button
-									type="button"
-									className="ml-auto rounded-full px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:bg-card"
-									onClick={skipCover}
-								>
-									Skip for now
-								</button>
-							)}
-						</div>
-					</form>
-				)}
+				</form>
 			</main>
 
 			<footer className="sticky bottom-0 z-10 bg-paper/95 backdrop-blur">
 				<div className="mx-auto flex w-full max-w-[44rem] items-center justify-between gap-4 px-6 py-4">
 					<p className="text-xs font-medium text-mute" aria-live="polite">
-						{done ? 'Draft saved' : `Step ${step} of ${LAST}`}
+						{`Step ${step} of ${LAST}`}
 					</p>
 					<div className="flex overflow-hidden rounded-xl bg-accent text-card" role="group" aria-label="Questions">
 						<button
 							type="button"
 							className="inline-flex h-10 w-11 items-center justify-center transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-accent"
 							onClick={goBack}
-							disabled={busy || (!done && step <= 1)}
+							disabled={busy || step <= 1}
 							aria-label="Previous question"
 						>
 							<Chevron direction="up" />

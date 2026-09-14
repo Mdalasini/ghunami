@@ -25,7 +25,7 @@ export default function FundPreview() {
 		<div className="flex min-h-dvh flex-col">
 			<header className="border-b border-line bg-paper">
 				<div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
-					<Link to="/create?step=4&from=preview" className="rounded-full px-3 py-2 text-sm font-bold text-mute hover:bg-sun">← Back to story</Link>
+
 					<Link to="/" aria-label="Ghunami home" className="inline-flex items-center gap-2">
 						<HorizonDisc className="h-9 w-9" />
 						<span className="hidden text-sm font-extrabold sm:inline">Ghunami</span>
@@ -103,12 +103,7 @@ export default function FundPreview() {
 							</aside>
 						</div>
 					</main>
-					<footer className="sticky bottom-0 z-10 border-t border-line bg-paper/95 backdrop-blur">
-						<div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-							<div><p className="text-sm font-bold">This is how your fund could look.</p><p className="mt-1 text-xs text-mute">Take a look, make it yours, then review your details.</p></div>
-							<Link to="/create?step=5" className="btn-press w-full gap-3 bg-accent text-card hover:bg-accent-deep sm:w-auto">Continue to review <span aria-hidden="true">→</span></Link>
-						</div>
-					</footer>
+
 				</>
 			)}
 		</div>
