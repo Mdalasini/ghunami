@@ -69,7 +69,7 @@ export function AuthBar() {
 		>
 			<button
 				type="button"
-				className="font-ui max-w-40 truncate rounded-full px-3 py-2 text-sm font-medium hover:bg-sun"
+				className="font-ui max-w-40 truncate rounded-full px-3 py-2 text-sm font-medium"
 				aria-expanded={open}
 				aria-haspopup="menu"
 				onClick={(event) => {
@@ -83,13 +83,13 @@ export function AuthBar() {
 				<div className="absolute right-0 top-full z-10 pt-2">
 					<div
 						role="menu"
-						className="min-w-[13rem] rounded-2xl border border-white/10 bg-ink p-2 text-card shadow-[0_18px_40px_-14px_rgba(15,26,18,0.55)]"
+						className="min-w-full rounded-3xl border-2 border-line bg-card p-1.5 shadow-[0_4px_0_0_var(--color-line)]"
 					>
 						<signOut.Form method="post" action="/auth/signout">
 							<button
 								type="submit"
 								role="menuitem"
-								className="font-ui w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium hover:bg-white/10"
+								className="font-ui w-full cursor-pointer whitespace-nowrap rounded-full px-5 py-2.5 text-xs font-extrabold tracking-wider text-mute uppercase hover:bg-paper hover:text-ink"
 							>
 								Sign out
 							</button>
