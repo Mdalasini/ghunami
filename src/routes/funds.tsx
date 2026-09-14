@@ -7,6 +7,7 @@ import { SiteHeader } from '../components/BrandLink';
 import { CoverImage } from '../components/CoverImage';
 import { HorizonDisc } from '../components/HorizonMark';
 import { formatGoal, resetDraft } from '../lib/draft';
+import { fundPath } from '../lib/fundUrl';
 import { coverMediaUrl } from '../lib/media';
 import { requireSession } from '../lib/requireSession';
 
@@ -57,31 +58,44 @@ export default function MyFunds() {
 						</div>
 					) : (
 						<ul className="mt-8 flex flex-col gap-4">
-							{results.map((fund) => (
-								<li key={fund.fundID}>
-									<Link
-										to={`/preview/${fund.fundID}`}
-										className="flex gap-4 rounded-3xl border border-line bg-card p-4 transition-colors hover:border-accent"
-									>
-										{fund.hasCover ? (
-											<CoverImage
-												src={coverMediaUrl(fund.fundID)}
-												alt=""
-												className="h-20 w-24 shrink-0 rounded-2xl"
-											/>
-										) : (
-											<div className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-sun">
-												<HorizonDisc className="h-10 w-10" />
-											</div>
-										)}
-										<div className="min-w-0 flex-1">
-											<p className="truncate font-extrabold">{fund.title}</p>
-											<p className="mt-1 text-sm text-mute">{formatGoal(fund.goal)}</p>
-											<p className="mt-2 text-xs font-bold tracking-wider text-hint uppercase">Draft</p>
+							{results.map((fund) => {
+								const live = fund.status === 'live';
+								const href = live ? fundPath(fund.fundID, fund.title) : `/preview/${fund.fundID}`;
+								return (
+									<li key={fund.fundID}>
+										<div className="flex items-stretch gap-2 rounded-3xl border border-line bg-card pr-3 transition-colors hover:border-accent">
+											<Link to={href} className="flex min-w-0 flex-1 gap-4 p-4">
+												{fund.hasCover ? (
+													<CoverImage
+														src={coverMediaUrl(fund.fundID, 'cover', fund.updatedAt)}
+														alt=""
+														className="h-20 w-24 shrink-0 rounded-2xl"
+													/>
+												) : (
+													<div className="flex h-20 w-24 shrink-0 items-center justify-center rounded-2xl bg-sun">
+														<HorizonDisc className="h-10 w-10" />
+													</div>
+												)}
+												<div className="min-w-0 flex-1">
+													<p className="truncate font-extrabold">{fund.title}</p>
+													<p className="mt-1 text-sm text-mute">{formatGoal(fund.goal)}</p>
+													<p className="mt-2 text-xs font-bold tracking-wider text-hint uppercase">
+														{live ? 'Live' : 'Draft'}
+													</p>
+												</div>
+											</Link>
+											{live ? (
+												<Link
+													to={`/preview/${fund.fundID}`}
+													className="shrink-0 self-center rounded-full px-3 py-2 text-xs font-bold text-accent hover:bg-sun"
+												>
+													Manage
+												</Link>
+											) : null}
 										</div>
-									</Link>
-								</li>
-							))}
+									</li>
+								);
+							})}
 						</ul>
 					)}
 					{status === 'CanLoadMore' && (

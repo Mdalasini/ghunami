@@ -40,7 +40,8 @@ export default defineSchema({
 		coverCrop: v.optional(crop),
 		coverName: v.optional(v.string()),
 		coverSkipped: v.boolean(),
-		status: v.literal('draft'),
+		status: v.union(v.literal('draft'), v.literal('live')),
+		publishedAt: v.optional(v.number()),
 		idempotencyKey: v.string(),
 		createdAt: v.number(),
 		updatedAt: v.number()
