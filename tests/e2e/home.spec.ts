@@ -12,7 +12,7 @@ test('home hydrates signed out and opens the fundraiser flow', async ({ page }) 
 
 	await page.getByRole('link', { name: 'Start a fundraiser' }).click();
 	await expect(page).toHaveURL(/\/create$/);
-	await expect(page.getByRole('heading', { name: 'How much do you want to raise?' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Fundraising goal' })).toBeVisible();
 
 	for (const _ of [0, 1]) {
 		await page.getByRole('button', { name: /100,000/ }).click();

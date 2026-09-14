@@ -2,33 +2,6 @@ import { type Locator, type Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { pngFromPixels, solidPng } from './png';
 
-type Box = { x: number; y: number; width: number; height: number };
-
-/* Bubbles land with a short scale animation; wait until two reads 100 ms apart agree. */
-async function settledBox(page: Page, locator: Locator): Promise<Box> {
-	let box: Box | null = null;
-	await expect
-		.poll(async () => {
-			const first = await locator.boundingBox();
-			await page.waitForTimeout(100);
-			const second = await locator.boundingBox();
-			if (!first || !second || JSON.stringify(first) !== JSON.stringify(second)) return false;
-			box = second;
-			return true;
-		})
-		.toBe(true);
-	if (!box) throw new Error('Element never settled');
-	return box;
-}
-
-/* Sub-pixel noise from animation frames is not a reflow; anything at or above half a pixel is. */
-function expectSameBox(actual: Box | null, expected: Box) {
-	expect(actual).not.toBeNull();
-	for (const key of ['x', 'y', 'width', 'height'] as const) {
-		expect(Math.abs(actual![key] - expected[key])).toBeLessThan(0.5);
-	}
-}
-
 const sharpCover = {
 	name: 'cover.png',
 	mimeType: 'image/png',
@@ -47,35 +20,54 @@ const tinyCover = {
 	buffer: solidPng(200, 250)
 };
 
-test('completes the local draft and can edit a previous answer', async ({ page }) => {
+async function answerGoal(page: Page, amount = /^Ksh\s*50,000$/) {
 	await page.goto('/create');
-	await expect(page.getByRole('heading', { name: 'How much do you want to raise?' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Fundraising goal' })).toBeVisible();
+	await page.getByRole('button', { name: amount }).click();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page.getByRole('heading', { name: 'Cover image' })).toBeVisible();
+}
 
-	await page.getByRole('button', { name: /100,000/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
+test('completes the local draft and can change an answer from the review', async ({ page }) => {
+	await answerGoal(page, /100,000/);
+	await expect(page.getByText('Step 2 of 5')).toBeVisible();
 
-	await expect(page.getByRole('heading', { name: 'Add a cover photo' })).toBeVisible();
-	await expect.poll(async () => {
-		const heading = await page.getByRole('heading', { name: 'Add a cover photo' }).boundingBox();
-		if (!heading) return false;
-		return heading.y >= 0 && heading.y + heading.height <= page.viewportSize()!.height;
-	}).toBe(true);
-	await expect(page.getByRole('button', { name: 'Click to add' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Choose a photo' })).toBeVisible();
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Click to change' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Change', exact: true })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Choose a photo' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Change photo' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeEnabled();
 	await page.keyboard.press('Enter');
 
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
-	const sentCover = page.getByRole('img', { name: 'Your cover' });
-	await expect(sentCover).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
+	const title = page.getByRole('textbox', { name: 'Title' });
+	await expect(title).toBeFocused();
+	await title.fill('Help Maya get home');
+	await title.press('Control+Enter');
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
+	await expect(title).toHaveValue('Help Maya get home');
+	await title.press('Enter');
+
+	await expect(page.getByRole('heading', { name: 'Fundraiser story' })).toBeVisible();
+	await expect(page.getByText('to make a line break')).toBeVisible();
+	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
+	await page.getByRole('button', { name: 'OK' }).click();
+
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+	const titleAnswer = page.getByRole('button', { name: 'Change your answer to step 3' });
+	await expect(titleAnswer).toContainText('Help Maya get home');
+	await expect(page.getByRole('button', { name: 'Change your answer to step 4' })).toContainText(
+		'Raising travel money so Maya can get home safely.'
+	);
+	await expect(page.getByRole('button', { name: 'Change your answer to step 1' })).toContainText(/100,000/);
+	const cover = page.getByRole('img', { name: 'Your cover' });
+	await expect(cover).toBeVisible();
 	await expect
-		.poll(async () => sentCover.evaluate((img) => [(img as HTMLImageElement).naturalWidth, (img as HTMLImageElement).naturalHeight]))
+		.poll(async () => cover.evaluate((img) => [(img as HTMLImageElement).naturalWidth, (img as HTMLImageElement).naturalHeight]))
 		.toEqual([1080, 1350]);
-	const encoded = await sentCover.evaluate(async (img) => {
+	const encoded = await cover.evaluate(async (img) => {
 		const image = img as HTMLImageElement;
 		const response = await fetch(image.src);
 		const blob = await response.blob();
@@ -84,125 +76,95 @@ test('completes the local draft and can edit a previous answer', async ({ page }
 	expect(['image/jpeg', 'image/webp']).toContain(encoded.type);
 	expect(encoded.size).toBeGreaterThan(0);
 	expect(encoded.size).toBeLessThanOrEqual(1024 * 1024);
-	const title = page.getByRole('textbox', { name: 'Title' });
-	await title.fill('Help Maya get home');
-	await title.press('Control+Enter');
+
+	// Changing an answer opens that question and comes straight back to the review.
+	await titleAnswer.click();
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
 	await expect(title).toHaveValue('Help Maya get home');
-	await title.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
-	await expect(title).toBeVisible();
-	await title.press('Enter');
-
-	await expect(page.getByRole('heading', { name: 'Tell people what happened' })).toBeVisible();
-	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
-	await page.getByRole('button', { name: 'Send' }).click();
-
+	await title.fill('Help Maya fly home');
+	await page.getByRole('button', { name: 'OK' }).click();
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
-	await expect(page.getByText('Tap anything to change it.')).toBeVisible();
-	await expect(page.getByRole('region', { name: 'Your draft' })).toHaveCount(0);
-	const titleAnswer = page.getByRole('button', { name: 'Change your answer to step 3' });
-	await expect(titleAnswer).toHaveText('Help Maya get home');
-	await expect(page.getByRole('button', { name: 'Change your answer to step 4' })).toHaveText(
-		'Raising travel money so Maya can get home safely.'
-	);
-	await expect(page.getByRole('button', { name: 'Change your answer to step 1' })).toHaveText(/100,000/);
-	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
+	await expect(titleAnswer).toContainText('Help Maya fly home');
 
-	// Editing happens in place: fix the title and land back on the review, not on the story step again.
-	await titleAnswer.click();
-	await expect(page.getByRole('contentinfo').getByText('Editing the title')).toBeVisible();
+	await page.getByRole('button', { name: 'Looks good' }).click();
+	await expect(page.getByRole('heading', { name: 'Saved in this browser' })).toBeVisible();
+	await expect(page.getByText('Draft saved')).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Start another' })).toBeVisible();
+	await page.getByRole('button', { name: 'Back' }).click();
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
-	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya fly home');
-	await page.getByRole('button', { name: 'Send' }).click();
+});
 
-	await expect(page.getByText('Editing the title')).toHaveCount(0);
-	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
-	await expect(titleAnswer).toHaveText('Help Maya fly home');
-	await expect(page.getByRole('button', { name: 'Looks good' })).toBeVisible();
+test('moves between questions with the arrows and keeps answers', async ({ page }) => {
+	await page.goto('/create');
+	await expect(page.getByText('Step 1 of 5')).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Goal in Kenyan shillings' })).toBeFocused();
+	await expect(page.getByRole('button', { name: 'Previous question' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Next question' })).toBeDisabled();
 
-	// Cancel restores the previous answer.
-	const goalAnswer = page.getByRole('button', { name: 'Change your answer to step 1' });
-	await goalAnswer.click();
 	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('75000');
-	await expect(page.getByRole('textbox', { name: 'Goal in Kenyan shillings' })).toHaveValue('75,000');
-	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-	await expect(goalAnswer).toHaveText(/100,000/);
+	await expect(page.getByRole('button', { name: 'Next question' })).toBeEnabled();
+	await page.getByRole('button', { name: 'Next question' }).click();
+	await expect(page.getByRole('heading', { name: 'Cover image' })).toBeVisible();
+	await expect(page.getByText('Step 2 of 5')).toBeVisible();
+	// A cover has to be chosen or skipped before the arrow will move on.
+	await expect(page.getByRole('button', { name: 'Next question' })).toBeDisabled();
 
-	// Clearing the field mid-edit keeps the sent bubble showing the answer that was sent.
-	await goalAnswer.click();
-	await expect(page.getByRole('textbox', { name: 'Goal in Kenyan shillings' })).toHaveValue('100,000');
-	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('');
-	await expect(goalAnswer).toHaveText(/100,000/);
-	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
-	// Switching to another answer discards the unsent change too.
-	await titleAnswer.click();
-	await expect(page.getByRole('contentinfo').getByText('Editing the title')).toBeVisible();
-	await expect(goalAnswer).toHaveText(/100,000/);
-	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-	await expect(goalAnswer).toHaveText(/100,000/);
+	await page.getByRole('button', { name: 'Previous question' }).click();
+	await expect(page.getByRole('heading', { name: 'Fundraising goal' })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Goal in Kenyan shillings' })).toHaveValue('75,000');
 });
 
 test('can skip the cover, remove a chosen photo, and return to it later', async ({ page }) => {
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'Add a cover photo' })).toBeVisible();
+	await answerGoal(page);
 
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Remove photo' }).click();
-	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeHidden();
-	await expect(page.getByRole('button', { name: 'Click to add' })).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Choose a photo' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeDisabled();
 
 	await page.getByRole('button', { name: 'Skip for now' }).click();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
-	const skipped = page.getByRole('button', { name: 'Change your answer to step 2' });
-	await expect(skipped).toHaveText('I’ll return to this later');
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
+	await page.getByRole('button', { name: 'OK' }).click();
+	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
+	await page.getByRole('button', { name: 'OK' }).click();
 
-	await skipped.click();
-	await expect(page.getByRole('contentinfo').getByText('Editing your cover photo')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+	const coverAnswer = page.getByRole('button', { name: 'Change your answer to step 2' });
+	await expect(coverAnswer).toContainText('I’ll return to this later');
+	// A skipped cover still lets the arrow move past the question.
+	await coverAnswer.click();
+	await expect(page.getByRole('heading', { name: 'Cover image' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Next question' })).toBeEnabled();
+
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
-	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	const cover = page.getByRole('img', { name: 'Your cover' });
 	await expect(cover).toBeVisible();
 	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
 
-	// Removing the cover during an edit leaves the sent bubble in place; cancelling keeps the original loadable.
-	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
+	// Coming back re-opens the saved photo in the cropper; removing it leaves the question unanswered.
+	await coverAnswer.click();
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 	await page.getByRole('button', { name: 'Remove photo' }).click();
 	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
-	await expect(cover).toBeVisible();
-	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-	await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0);
-	await expect(cover).toBeVisible();
-	await expect
-		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
-		.toBe(1080);
-
-	// Cancelling while the removal is still lowering the tray must not let that removal land on the restored cover.
-	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
-	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
-	await page.getByRole('button', { name: 'Remove photo' }).click();
-	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-	await page.waitForTimeout(600);
-	await expect(cover).toBeVisible();
-	await expect(page.getByText('I’ll return to this later')).toHaveCount(0);
-	await expect
-		.poll(async () => cover.evaluate((img) => (img as HTMLImageElement).naturalWidth))
-		.toBe(1080);
+	await expect(page.getByRole('button', { name: 'OK' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Next question' })).toBeDisabled();
+	await page.getByRole('button', { name: 'Skip for now' }).click();
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+	await expect(coverAnswer).toContainText('I’ll return to this later');
 });
 
 test('keeps simple story formatting', async ({ page }) => {
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await answerGoal(page);
 	await page.getByRole('button', { name: 'Skip for now' }).click();
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
-	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('button', { name: 'OK' }).click();
 
 	const story = page.getByRole('textbox', { name: 'Story' });
 	await expect(story).toBeVisible();
@@ -218,7 +180,7 @@ test('keeps simple story formatting', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByText(/^\d+ \/ 4000$/)).toHaveText('15 / 4000');
 
-	await page.getByRole('button', { name: 'Send' }).click();
+	await page.keyboard.press('Enter');
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	const answer = page.getByRole('button', { name: 'Change your answer to step 4' });
 	await expect(answer.locator('h1')).toHaveText('Maya');
@@ -228,10 +190,9 @@ test('keeps simple story formatting', async ({ page }) => {
 
 test('rejects an empty goal and an unsupported or oversized cover', async ({ page }) => {
 	await page.goto('/create');
-	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
-
+	await expect(page.getByRole('button', { name: 'OK' })).toBeDisabled();
 	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await page.getByRole('button', { name: 'OK' }).click();
 
 	await page.locator('input[type="file"]').setInputFiles({
 		name: 'notes.txt',
@@ -249,29 +210,25 @@ test('rejects an empty goal and an unsupported or oversized cover', async ({ pag
 });
 
 test('blocks a cover crop below 540×675 and warns when the crop is a little soft', async ({ page }) => {
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await answerGoal(page);
 
 	await page.locator('input[type="file"]').setInputFiles(tinyCover);
 	await expect(page.getByRole('img', { name: 'Photo to crop' })).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveText(/too small/i);
 	// Zooming could only make a weak photo worse, so there is nothing to zoom.
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeDisabled();
 
 	await page.locator('input[type="file"]').setInputFiles(softCover);
 	await expect(page.getByRole('status')).toHaveText(/a little soft/i);
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeEnabled();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
 });
 
 test('shows only the saved frame and clamps zoom before quality degrades', async ({ page }) => {
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await answerGoal(page);
 	await page.locator('input[type="file"]').setInputFiles(sharpCover);
 	const slider = page.getByRole('slider', { name: 'Zoom photo' });
 	await expect(slider).toBeEnabled();
@@ -291,11 +248,9 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	expect(cropBounds).not.toBeNull();
 	expect(bounds!.width).toBeLessThanOrEqual(448);
 	expect(bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 300);
-	await expect.poll(async () => {
-		const controls = await slider.boundingBox();
-		const continueButton = await page.getByRole('button', { name: 'Send' }).boundingBox();
-		return controls!.y + controls!.height < continueButton!.y;
-	}).toBe(true);
+	const controls = await slider.boundingBox();
+	const okButton = await page.getByRole('button', { name: 'OK' }).boundingBox();
+	expect(controls!.y + controls!.height).toBeLessThan(okButton!.y);
 	expect(Math.abs(bounds!.width - cropBounds!.width)).toBeLessThanOrEqual(1);
 	expect(Math.abs(bounds!.height - cropBounds!.height)).toBeLessThanOrEqual(1);
 	await viewport.hover();
@@ -304,17 +259,20 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	await expect(slider).toHaveAttribute('aria-valuetext', maxZoom!);
 	await expect(page.getByRole('alert')).toHaveCount(0);
 	await expect(page.getByRole('status')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
-	await page.getByRole('button', { name: 'Change your answer to step 2' }).click();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeEnabled();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
+
+	// Going back re-opens the same frame at the same zoom.
+	await page.getByRole('button', { name: 'Previous question' }).click();
+	await expect(page.getByRole('heading', { name: 'Cover image' })).toBeVisible();
 	await expect(slider).toBeVisible();
 	await expect(slider).toHaveValue('100');
 	await expect(slider).toHaveAttribute('aria-valuetext', maxZoom!);
 	await expect(viewport).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeEnabled();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
 });
 
 const RED = [200, 24, 24] as const;
@@ -350,9 +308,7 @@ function closerTo(
 }
 
 test('encodes the user-selected crop region, not just any 4:5 slice', async ({ page }) => {
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await answerGoal(page);
 
 	await page.locator('input[type="file"]').setInputFiles({
 		name: 'banded.png',
@@ -362,7 +318,6 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 
 	const cropper = page.locator('.cover-crop-container');
-	// Hovering waits for the tray to finish rising before we measure where to drag.
 	await cropper.hover();
 	const box = await cropper.boundingBox();
 	if (!box) throw new Error('Cover cropper was not positioned');
@@ -371,88 +326,21 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	await page.mouse.move(box.x + box.width / 2, box.y + 24, { steps: 10 });
 	await page.mouse.up();
 
-	await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
-	await page.getByRole('button', { name: 'Send' }).click();
+	await expect(page.getByRole('button', { name: 'OK' })).toBeEnabled();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page.getByRole('heading', { name: 'Fundraiser title' })).toBeVisible();
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
+	await page.getByRole('button', { name: 'OK' }).click();
+	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
+	await page.getByRole('button', { name: 'OK' }).click();
 
-	const sentCover = page.getByRole('img', { name: 'Your cover' });
-	await expect(sentCover).toBeVisible();
-	const [top, bottom] = await sampleCover(sentCover, [
+	const cover = page.getByRole('img', { name: 'Your cover' });
+	await expect(cover).toBeVisible();
+	const [top, bottom] = await sampleCover(cover, [
 		{ x: 540, y: 80 },
 		{ x: 540, y: 1270 }
 	]);
 	if (!top || !bottom) throw new Error('Missing cover samples');
 	expect(closerTo(top, BLUE, RED)).toBe('a');
 	expect(closerTo(bottom, BLUE, RED)).toBe('a');
-});
-
-test('opening an edit does not scroll the thread to the bottom', async ({ page }) => {
-	await page.setViewportSize({ width: 420, height: 560 });
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
-	await page.getByRole('button', { name: 'Skip for now' }).click();
-	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
-	await page.getByRole('button', { name: 'Send' }).click();
-	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
-	await page.getByRole('button', { name: 'Send' }).click();
-	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
-
-	const goalAnswer = page.getByRole('button', { name: 'Change your answer to step 1' });
-	await goalAnswer.scrollIntoViewIfNeeded();
-	await expect
-		.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY))
-		.toBeGreaterThan(200);
-	const before = await page.evaluate(() => window.scrollY);
-	await goalAnswer.click();
-	await expect(page.getByRole('contentinfo').getByText('Editing your goal')).toBeVisible();
-	await page.waitForTimeout(600);
-	const after = await page.evaluate(() => window.scrollY);
-	expect(Math.abs(after - before)).toBeLessThan(120);
-	await expect(goalAnswer).toBeInViewport();
-});
-
-test('the photo tray rises over the thread and lowers again without moving it', async ({ page }) => {
-	await page.goto('/create');
-	await page.getByRole('button', { name: /^Ksh\s*50,000$/ }).click();
-	await page.getByRole('button', { name: 'Send' }).click();
-	const heading = page.getByRole('heading', { name: 'Add a cover photo' });
-	const tip = page.getByText('Choosing a photo');
-	await expect(heading).toBeVisible();
-	await expect(tip).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Skip for now' })).toBeVisible();
-	// The bubbles are still landing and the suggestion row is folding away; let the layout settle first.
-	const before = await settledBox(page, heading);
-	const tipBefore = await settledBox(page, tip);
-
-	await page.locator('input[type="file"]').setInputFiles(sharpCover);
-	const tray = page.locator('.cover-tray');
-	await expect(tray).toHaveClass(/is-raised/);
-	const cropper = page.locator('.cover-crop-container');
-	await cropper.hover();
-	// The tray overlays the thread: nothing behind it was reflowed or hidden.
-	expectSameBox(await heading.boundingBox(), before);
-	expectSameBox(await tip.boundingBox(), tipBefore);
-	await expect(tip).toHaveCount(1);
-	const trayBox = await tray.boundingBox();
-	const footer = await page.getByRole('contentinfo').boundingBox();
-	expect(trayBox!.y + trayBox!.height).toBeLessThanOrEqual(footer!.y + 1);
-	expect(trayBox!.y).toBeGreaterThanOrEqual(0);
-
-	await page.getByRole('button', { name: 'Remove photo' }).click();
-	await expect(tray).not.toHaveClass(/is-raised/);
-	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeHidden();
-	expectSameBox(await heading.boundingBox(), before);
-	expectSameBox(await tip.boundingBox(), tipBefore);
-
-	// Sending lowers the tray too; the thread keeps the tip, and the cover lands as the next message.
-	await page.locator('input[type="file"]').setInputFiles(sharpCover);
-	await expect(tray).toHaveClass(/is-raised/);
-	await page.getByRole('button', { name: 'Send' }).click();
-	// Sent photos shrink away rather than lowering, so the bubble is not seen behind a moving tray.
-	await expect(tray).toHaveClass(/is-sent/);
-	await expect(tray).not.toHaveClass(/is-raised/);
-	await expect(page.getByRole('img', { name: 'Your cover' })).toBeVisible();
-	await expect(tip).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'What should we call it?' })).toBeVisible();
-	await expect(page.locator('.reactEasyCrop_Container')).toHaveCount(0);
 });
