@@ -12,7 +12,7 @@ test('home hydrates signed out and opens the fundraiser flow', async ({ page }) 
 
 	await page.getByRole('link', { name: 'Start a fundraiser' }).first().click();
 	await expect(page).toHaveURL(/\/create$/);
-	await expect(page.getByRole('heading', { name: 'How much do you want to raise?' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Fundraising goal' })).toBeVisible();
 
 	const unexpected = errors.filter((message) => !/websocket|convex|failed to fetch/i.test(message));
 	expect(unexpected).toEqual([]);
