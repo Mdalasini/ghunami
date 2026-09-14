@@ -176,7 +176,7 @@ export default function FundPreview() {
 								This fund is live. Edits you make here change the public page.
 							</p>
 						) : null}
-						<main className="slide-forward mx-auto w-full max-w-6xl flex-1 px-6 pt-8 pb-48 md:pt-12 lg:pb-20">
+						<main className="slide-forward mx-auto w-full max-w-6xl flex-1 px-6 pt-8 pb-64 md:pt-12 lg:pb-20">
 							<div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-12">
 								<article className="min-w-0">
 									<div className="mb-6 flex items-start justify-between gap-3">
