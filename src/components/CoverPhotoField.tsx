@@ -340,15 +340,17 @@ export function CoverPhotoField({
 				</button>
 			) : (
 				<div
-					className="relative flex overflow-hidden rounded-3xl border-2 border-line bg-card"
+					className="relative isolate w-full overflow-hidden rounded-3xl bg-ink"
+					// Full column width, shrinking on short screens so the OK button below stays in view.
+					style={{ maxWidth: `min(100%, calc((100svh - 28rem) * ${COVER_ASPECT}))` }}
 					onDragOver={onDragOver}
 					onDragLeave={() => setDragging(false)}
 					onDrop={onDrop}
 				>
-					{/* The photo column. Its width sets the card's height, so the OK button stays in view below. */}
+					{/* Keep the visible photo at the output ratio so the preview matches the saved crop. */}
 					<div
 						ref={cropViewport}
-						className="relative w-40 shrink-0 overflow-hidden bg-ink md:w-52"
+						className="relative w-full overflow-hidden bg-ink"
 						style={{ aspectRatio: COVER_ASPECT }}
 					>
 						{showViewport ? (
@@ -420,61 +422,57 @@ export function CoverPhotoField({
 							<CoverImage src={coverUrl} alt="Your cover" className="h-full w-full" />
 						)}
 					</div>
-					<div className="flex min-w-0 flex-1 flex-col justify-center gap-3 px-5 py-4">
-						{pending && canZoom && (
-							<label className="flex items-center gap-3">
-								<span className="text-xs font-extrabold tracking-wider text-mute uppercase">Zoom</span>
-								<input
-									type="range"
-									min={0}
-									max={100}
-									step={0.5}
-									value={zoomToPercent(zoom, maxZoom)}
-									onChange={(event) =>
-										changeZoom(percentToZoom(Number(event.currentTarget.value), maxZoom))
-									}
-									className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-accent)]"
-									aria-label="Zoom photo"
-									aria-valuetext={`${zoom.toFixed(2)}×`}
-									aria-describedby="cover-crop-help"
-								/>
-							</label>
-						)}
-						{pending && error ? (
-							<p className="text-sm font-medium text-error" role="alert">
-								{error}
-							</p>
-						) : pending && warning ? (
-							<p className="text-sm font-medium text-mute" role="status" aria-live="polite">
-								{warning}
-							</p>
-						) : (
-							<p id="cover-crop-help" className="text-sm text-mute">
-								{pending ? helper : reading ? 'Reading photo' : 'Your cover photo'}
-							</p>
-						)}
-						{!processing && (
-							<div className="flex flex-wrap gap-2">
+					{!reading && !processing && (
+						<>
+							<div className="absolute top-3 right-3 z-20 flex items-center gap-2">
 								<button
 									type="button"
-									className="rounded-full border-2 border-line bg-card px-4 py-1.5 text-xs font-extrabold tracking-wider text-accent uppercase transition-colors hover:border-accent"
+									className="min-h-11 rounded-full bg-black/60 px-4 text-xs font-bold text-white backdrop-blur-md transition-colors hover:bg-black/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
 									onClick={() => fileInput.current?.click()}
 								>
 									Change photo
 								</button>
 								<button
 									type="button"
-									className="rounded-full px-3 py-1.5 text-xs font-extrabold tracking-wider text-mute uppercase transition-colors hover:bg-paper hover:text-error"
+									className="flex size-11 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md transition-colors hover:bg-black/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
 									onClick={clear}
+									aria-label="Remove photo"
+									title="Remove photo"
 								>
-									Remove photo
+									<svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+										<path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+									</svg>
 								</button>
 							</div>
-						)}
-					</div>
+							{pending && (
+								<div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-4 pt-10 pb-4 text-white">
+									{canZoom && (
+										<label className="pointer-events-auto flex min-h-11 items-center gap-3">
+											<span className="text-xs font-bold">Zoom</span>
+											<input
+												type="range"
+												min={0}
+												max={100}
+												step={0.5}
+												value={zoomToPercent(zoom, maxZoom)}
+												onChange={(event) => changeZoom(percentToZoom(Number(event.currentTarget.value), maxZoom))}
+												className="h-1.5 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-white/40 accent-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+												aria-label="Zoom photo"
+												aria-valuetext={`${zoom.toFixed(2)}×`}
+												aria-describedby="cover-crop-help"
+											/>
+										</label>
+									)}
+									<p id="cover-crop-help" className="text-center text-xs leading-relaxed text-white/90">
+										{helper}
+									</p>
+								</div>
+							)}
+						</>
+					)}
 				</div>
 			)}
-			{!showViewport && message ? (
+			{message ? (
 				error ? (
 					<p className="text-sm font-medium text-error" role="alert">
 						{error}

@@ -5,19 +5,19 @@ import { pngFromPixels, solidPng } from './png';
 const sharpCover = {
 	name: 'cover.png',
 	mimeType: 'image/png',
-	buffer: solidPng(800, 1000)
+	buffer: solidPng(1000, 800)
 };
 
 const softCover = {
 	name: 'soft.png',
 	mimeType: 'image/png',
-	buffer: solidPng(600, 750)
+	buffer: solidPng(750, 600)
 };
 
 const tinyCover = {
 	name: 'tiny.png',
 	mimeType: 'image/png',
-	buffer: solidPng(200, 250)
+	buffer: solidPng(250, 200)
 };
 
 async function answerGoal(page: Page, amount = /^Ksh\s*50,000$/) {
@@ -66,7 +66,7 @@ test('completes the local draft and can change an answer from the review', async
 	await expect(cover).toBeVisible();
 	await expect
 		.poll(async () => cover.evaluate((img) => [(img as HTMLImageElement).naturalWidth, (img as HTMLImageElement).naturalHeight]))
-		.toEqual([1080, 1350]);
+		.toEqual([1350, 1080]);
 	const encoded = await cover.evaluate(async (img) => {
 		const image = img as HTMLImageElement;
 		const response = await fetch(image.src);
@@ -209,7 +209,7 @@ test('rejects an empty goal and an unsupported or oversized cover', async ({ pag
 	await expect(page.getByRole('alert')).toHaveText(/over 25 MB/i);
 });
 
-test('blocks a cover crop below 540×675 and warns when the crop is a little soft', async ({ page }) => {
+test('blocks a cover crop below 675×540 and warns when the crop is a little soft', async ({ page }) => {
 	await answerGoal(page);
 
 	await page.locator('input[type="file"]').setInputFiles(tinyCover);
@@ -246,11 +246,14 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	const cropBounds = await frame.boundingBox();
 	expect(bounds).not.toBeNull();
 	expect(cropBounds).not.toBeNull();
-	expect(bounds!.width).toBeLessThanOrEqual(448);
-	expect(bounds!.height).toBeLessThanOrEqual(page.viewportSize()!.height - 300);
 	const controls = await slider.boundingBox();
 	const okButton = await page.getByRole('button', { name: 'OK' }).boundingBox();
 	expect(controls!.y + controls!.height).toBeLessThan(okButton!.y);
+	expect(okButton!.y + okButton!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+	// On a taller screen the photo fills the column, as wide as the upload box.
+	await page.setViewportSize({ width: 1280, height: 1000 });
+	await expect.poll(async () => (await viewport.boundingBox())!.width).toBeGreaterThan(560);
+	await page.setViewportSize({ width: 1280, height: 720 });
 	expect(Math.abs(bounds!.width - cropBounds!.width)).toBeLessThanOrEqual(1);
 	expect(Math.abs(bounds!.height - cropBounds!.height)).toBeLessThanOrEqual(1);
 	await viewport.hover();
@@ -282,8 +285,10 @@ async function sampleCover(
 	img: Locator,
 	points: Array<{ x: number; y: number }>
 ): Promise<Array<[number, number, number]>> {
-	return await img.evaluate((el, pts) => {
+	return await img.evaluate(async (el, pts) => {
 		const image = el as HTMLImageElement;
+		// An undecoded image draws as black, which reads as "closer to red".
+		await image.decode();
 		const canvas = document.createElement('canvas');
 		canvas.width = image.naturalWidth;
 		canvas.height = image.naturalHeight;
@@ -307,13 +312,13 @@ function closerTo(
 	return dist(a) <= dist(b) ? 'a' : 'b';
 }
 
-test('encodes the user-selected crop region, not just any 4:5 slice', async ({ page }) => {
+test('encodes the user-selected crop region, not just any 5:4 slice', async ({ page }) => {
 	await answerGoal(page);
 
 	await page.locator('input[type="file"]').setInputFiles({
 		name: 'banded.png',
 		mimeType: 'image/png',
-		buffer: pngFromPixels(800, 2200, (_x, y) => (y < 1000 ? RED : BLUE))
+		buffer: pngFromPixels(1000, 2200, (_x, y) => (y < 1000 ? RED : BLUE))
 	});
 	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
 
@@ -323,7 +328,7 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	if (!box) throw new Error('Cover cropper was not positioned');
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 	await page.mouse.down();
-	await page.mouse.move(box.x + box.width / 2, box.y + 24, { steps: 10 });
+	await page.mouse.move(box.x + box.width / 2, box.y - box.height, { steps: 10 });
 	await page.mouse.up();
 
 	await expect(page.getByRole('button', { name: 'OK' })).toBeEnabled();
@@ -337,8 +342,8 @@ test('encodes the user-selected crop region, not just any 4:5 slice', async ({ p
 	const cover = page.getByRole('img', { name: 'Your cover' });
 	await expect(cover).toBeVisible();
 	const [top, bottom] = await sampleCover(cover, [
-		{ x: 540, y: 80 },
-		{ x: 540, y: 1270 }
+		{ x: 675, y: 80 },
+		{ x: 675, y: 1000 }
 	]);
 	if (!top || !bottom) throw new Error('Missing cover samples');
 	expect(closerTo(top, BLUE, RED)).toBe('a');
