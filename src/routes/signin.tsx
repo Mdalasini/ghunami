@@ -12,7 +12,7 @@ function isEmail(value: string): boolean {
 }
 
 export function meta() {
-	return [{ title: 'Sign in · Ghunami' }];
+	return [{ title: 'Sign in · ghunami' }];
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {

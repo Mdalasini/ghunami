@@ -1,19 +1,17 @@
 import { Link } from 'react-router';
-import logo from '../assets/logo.svg';
 import { AuthBar } from '../components/AuthBar';
+import { BrandLink } from '../components/BrandLink';
 import { resetDraft } from '../lib/draft';
 
 export function meta() {
-	return [{ title: 'Ghunami' }];
+	return [{ title: 'ghunami' }];
 }
 
 export default function Home() {
 	return (
 		<div className="min-h-dvh px-6 py-8 md:px-12">
 			<header className="flex items-center justify-between gap-4">
-				<Link to="/" aria-label="ghunami — home">
-					<img src={logo} alt="ghunami" className="h-8 w-auto" />
-				</Link>
+				<BrandLink />
 				<AuthBar />
 			</header>
 

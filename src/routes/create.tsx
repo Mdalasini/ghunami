@@ -22,7 +22,6 @@ import {
 	type StoryFormats,
 	StoryToolbar
 } from '../components/StoryEditor';
-import { HorizonDisc } from '../components/HorizonMark';
 import { clearCover, formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft, type CreateDraft } from '../lib/draft';
 import { coverMediaUrl } from '../lib/media';
 import { persistDraft } from '../lib/persistFund';
@@ -115,7 +114,7 @@ function Question({ n, q, sub }: { n: number; q: string; sub: string }) {
 }
 
 export function meta() {
-	return [{ title: 'Start a fundraiser · Ghunami' }];
+	return [{ title: 'Start a fundraiser · ghunami' }];
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -527,11 +526,7 @@ function CreateForm() {
 				/>
 			</div>
 
-			<header className="mx-auto flex w-full max-w-[44rem] items-center justify-between px-6 pt-6">
-				<span className="inline-flex items-center gap-2">
-					<HorizonDisc className="h-9 w-9" />
-					<span className="text-sm font-extrabold">Ghunami</span>
-				</span>
+			<header className="mx-auto flex w-full max-w-[44rem] items-center justify-end px-6 pt-6">
 				<Link
 					to="/"
 					aria-label="Cancel and go home"

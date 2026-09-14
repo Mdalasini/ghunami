@@ -2,6 +2,7 @@ import { useQuery } from 'convex/react';
 import { Link, useParams } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { AuthGate } from '../components/AuthGate';
+import { BrandLink } from '../components/BrandLink';
 import { CoverImage } from '../components/CoverImage';
 import { HorizonDisc } from '../components/HorizonMark';
 import { isFundID } from '../../convex/lib/fundId';
@@ -11,7 +12,7 @@ import { requireSession } from '../lib/requireSession';
 import type { LoaderFunctionArgs } from 'react-router';
 
 export function meta() {
-	return [{ title: 'Preview your fund · Ghunami' }];
+	return [{ title: 'Preview your fund · ghunami' }];
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -233,10 +234,7 @@ export default function FundPreview() {
 			<div className="flex min-h-dvh flex-col">
 				<header className="border-b border-line bg-paper">
 					<div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
-						<Link to="/" aria-label="Ghunami home" className="inline-flex items-center gap-2">
-							<HorizonDisc className="h-9 w-9" />
-							<span className="hidden text-sm font-extrabold sm:inline">Ghunami</span>
-						</Link>
+						<BrandLink />
 						<span className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-mute">
 							Draft preview
 						</span>
