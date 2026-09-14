@@ -1,14 +1,16 @@
 import { useMutation, useQuery } from 'convex/react';
-import { useEffect, useId, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useId, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, type LoaderFunctionArgs } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { isFundID } from '../../convex/lib/fundId';
 import { AuthGate } from '../components/AuthGate';
 import { SiteHeader } from '../components/BrandLink';
+import { EditFundDialog, type EditField } from '../components/EditFundDialog';
 import { FundActions, FundCover, FundDonations, FundProgress, FundStory } from '../components/FundView';
+import { Modal } from '../components/Modal';
 import { fundPath } from '../lib/fundUrl';
 import { coverMediaUrl } from '../lib/media';
+import type { PreviewFundDraft } from '../lib/persistFund';
 import { requireSession } from '../lib/requireSession';
 
 export function meta() {
@@ -20,21 +22,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
 	return null;
 }
 
-function EditLink({ fundID, step, children }: { fundID: string; step: number; children: string }) {
+function EditControl({
+	fund,
+	field,
+	children
+}: {
+	fund: PreviewFundDraft;
+	field: EditField;
+	children: string;
+}) {
+	const [open, setOpen] = useState(false);
 	return (
-		<Link
-			to={`/create?fundID=${encodeURIComponent(fundID)}&step=${step}&from=preview`}
-			className="shrink-0 rounded-full px-3 py-2 text-xs font-bold text-accent transition-colors hover:bg-sun"
-		>
-			{children}
-		</Link>
+		<>
+			<button
+				type="button"
+				className="shrink-0 rounded-full px-3 py-2 text-xs font-bold text-accent transition-colors hover:bg-sun"
+				aria-haspopup="dialog"
+				aria-expanded={open}
+				onClick={() => setOpen(true)}
+			>
+				{children}
+			</button>
+			{open ? <EditFundDialog fund={fund} field={field} onClose={() => setOpen(false)} /> : null}
+		</>
 	);
 }
 
 function PublishControl({ fundID }: { fundID: string }) {
 	const [confirming, setConfirming] = useState(false);
-	const close = () => setConfirming(false);
-
 	return (
 		<>
 			<button
@@ -42,13 +57,11 @@ function PublishControl({ fundID }: { fundID: string }) {
 				className="rounded-full bg-accent px-3 py-1.5 text-xs font-extrabold tracking-wider text-card uppercase hover:bg-accent-deep"
 				aria-haspopup="dialog"
 				aria-expanded={confirming}
-				onClick={() => {
-					setConfirming(true);
-				}}
+				onClick={() => setConfirming(true)}
 			>
 				Set fund live
 			</button>
-			{confirming ? createPortal(<PublishDialog fundID={fundID} onCancel={close} />, document.body) : null}
+			{confirming ? <PublishDialog fundID={fundID} onCancel={() => setConfirming(false)} /> : null}
 		</>
 	);
 }
@@ -57,27 +70,10 @@ function PublishDialog({ fundID, onCancel }: { fundID: string; onCancel: () => v
 	const publish = useMutation(api.funds.publish);
 	const navigate = useNavigate();
 	const titleId = useId();
-	const panelRef = useRef<HTMLDivElement>(null);
 	const pendingRef = useRef(false);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState('');
-	const [armed, setArmed] = useState(false);
 	pendingRef.current = pending;
-
-	useEffect(() => {
-		const arm = window.setTimeout(() => setArmed(true), 0);
-		const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		panelRef.current?.querySelector('button')?.focus();
-		function onKey(event: KeyboardEvent) {
-			if (event.key === 'Escape' && !pendingRef.current) onCancel();
-		}
-		document.addEventListener('keydown', onKey);
-		return () => {
-			window.clearTimeout(arm);
-			document.removeEventListener('keydown', onKey);
-			previous?.focus();
-		};
-	}, [onCancel]);
 
 	async function confirm() {
 		if (pending) return;
@@ -93,52 +89,41 @@ function PublishDialog({ fundID, onCancel }: { fundID: string; onCancel: () => v
 	}
 
 	return (
-		<div className="fixed inset-0 z-30 flex items-center justify-center px-6">
-			<button
-				type="button"
-				className="absolute inset-0 bg-ink/40"
-				aria-label="Cancel publishing"
-				disabled={pending || !armed}
-				onClick={onCancel}
-			/>
-			<div
-				ref={panelRef}
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby={titleId}
-				className="relative w-full max-w-md rounded-3xl border border-line bg-card p-8 shadow-[0_16px_40px_-16px_rgb(15_26_18/0.35)]"
-			>
-				<h2 id={titleId} className="text-2xl font-extrabold tracking-[-0.03em]">
-					Set this fund live?
-				</h2>
-				<p className="mt-3 text-sm leading-relaxed text-mute">
-					Anyone with the link will be able to see the fund and its cover photo. You can keep editing afterwards.
+		<Modal
+			titleId={titleId}
+			title="Set this fund live?"
+			onClose={onCancel}
+			closeDisabled={pending}
+			closeLabel="Cancel publishing"
+			onOpen={(panel) => panel.querySelector('button')?.focus()}
+		>
+			<p className="mt-3 text-sm leading-relaxed text-mute">
+				Anyone with the link will be able to see the fund and its cover photo. You can keep editing afterwards.
+			</p>
+			{error ? (
+				<p className="mt-3 text-sm font-bold text-error" role="alert">
+					{error}
 				</p>
-				{error ? (
-					<p className="mt-3 text-sm font-bold text-error" role="alert">
-						{error}
-					</p>
-				) : null}
-				<div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-					<button
-						type="button"
-						disabled={pending}
-						className="btn-press border-2 border-line bg-card px-5 text-accent [--btn-edge:var(--color-line)]"
-						onClick={onCancel}
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						disabled={pending}
-						className="btn-press bg-accent px-5 text-card hover:bg-accent-deep"
-						onClick={() => void confirm()}
-					>
-						{pending ? 'Publishing…' : 'Set fund live'}
-					</button>
-				</div>
+			) : null}
+			<div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+				<button
+					type="button"
+					disabled={pending}
+					className="btn-press border-2 border-line bg-card px-5 text-accent [--btn-edge:var(--color-line)]"
+					onClick={onCancel}
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					disabled={pending}
+					className="btn-press bg-accent px-5 text-card hover:bg-accent-deep"
+					onClick={() => void confirm()}
+				>
+					{pending ? 'Publishing…' : 'Set fund live'}
+				</button>
 			</div>
-		</div>
+		</Modal>
 	);
 }
 
@@ -195,9 +180,9 @@ export default function FundPreview() {
 										<h1 className="text-3xl leading-[1.12] font-extrabold tracking-[-0.035em] wrap-break-word sm:text-4xl md:text-5xl">
 											{fund.title}
 										</h1>
-										<EditLink fundID={fund.fundID} step={3}>
+										<EditControl fund={fund} field="title">
 											Edit title
-										</EditLink>
+										</EditControl>
 									</div>
 									<FundCover
 										title={fund.title}
@@ -207,18 +192,18 @@ export default function FundPreview() {
 										emptyHint="Give your story a face. You can add this later."
 									/>
 									<div className="mt-2 flex justify-end">
-										<EditLink fundID={fund.fundID} step={2}>
+										<EditControl fund={fund} field="cover">
 											{fund.hasCover ? 'Edit cover' : 'Add cover'}
-										</EditLink>
+										</EditControl>
 									</div>
 									<section className="mt-5 border-t border-line pt-7" aria-labelledby="story-heading">
 										<div className="mb-5 flex items-center justify-between gap-3">
 											<h2 id="story-heading" className="text-lg font-extrabold">
 												The story
 											</h2>
-											<EditLink fundID={fund.fundID} step={4}>
+											<EditControl fund={fund} field="story">
 												Edit story
-											</EditLink>
+											</EditControl>
 										</div>
 										<FundStory html={fund.story} />
 									</section>
@@ -226,9 +211,9 @@ export default function FundPreview() {
 
 								<aside className="rounded-3xl border border-line bg-card p-6 lg:sticky lg:top-8" aria-label="Donation preview">
 									<div className="-mt-2 -mr-2 flex justify-end">
-										<EditLink fundID={fund.fundID} step={1}>
+										<EditControl fund={fund} field="goal">
 											Edit goal
-										</EditLink>
+										</EditControl>
 									</div>
 									<FundProgress goal={fund.goal} />
 									<div className="hidden lg:block">
