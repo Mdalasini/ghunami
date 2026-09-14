@@ -15,7 +15,7 @@ export function safeReturnTo(value: string | null | undefined): string {
 		if (url.origin !== 'https://ghunami.invalid' || url.username || url.password) {
 			return '/';
 		}
-		const dest = `${url.pathname}${url.search}${url.hash}`;
+		const dest = `${stripDataSuffix(url.pathname)}${url.search}${url.hash}`;
 		if (!dest.startsWith('/') || dest.startsWith('//')) {
 			return '/';
 		}
@@ -23,4 +23,9 @@ export function safeReturnTo(value: string | null | undefined): string {
 	} catch {
 		return '/';
 	}
+}
+
+/** React Router client navigations hit `/path.data`; send people back to the document. */
+function stripDataSuffix(pathname: string) {
+	return pathname.replace(/\.data$/, '');
 }

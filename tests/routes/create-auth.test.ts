@@ -17,6 +17,20 @@ describe('requireSession / legacy preview', () => {
 		}
 	});
 
+	it('strips React Router .data from the create returnTo', async () => {
+		process.env.SESSION_SECRET = TEST_SESSION_SECRET;
+		const { loader } = await import('../../src/routes/create');
+		try {
+			await loader(routeArgs(new Request('https://ghunami.test/create.data')));
+			expect.unreachable('expected a redirect');
+		} catch (error) {
+			expect(isResponse(error)).toBe(true);
+			if (!isResponse(error)) return;
+			expect(error.status).toBe(302);
+			expect(error.headers.get('Location')).toBe('/signin?returnTo=%2Fcreate');
+		}
+	});
+
 	it('sends /create/preview to /create without inventing a fund ID', async () => {
 		const { loader } = await import('../../src/routes/create.preview');
 		const result = await loader();

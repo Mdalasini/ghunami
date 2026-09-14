@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useConvexAuth } from 'convex/react';
 import { useLocation, useNavigate } from 'react-router';
 import { HorizonDisc } from './HorizonMark';
+import { safeReturnTo } from '../lib/returnTo';
 
 export function AuthGate({ children }: { children: ReactNode }) {
 	const { isLoading, isAuthenticated } = useConvexAuth();
@@ -10,7 +11,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
 	useEffect(() => {
 		if (isLoading || isAuthenticated) return;
-		const returnTo = `${location.pathname}${location.search}`;
+		const returnTo = safeReturnTo(`${location.pathname}${location.search}`);
 		void navigate(`/signin?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
 	}, [isLoading, isAuthenticated, location.pathname, location.search, navigate]);
 

@@ -13,7 +13,6 @@ import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { TITLE_MAX } from '../../convex/lib/fundFields';
 import { isFundID } from '../../convex/lib/fundId';
-import { AuthGate } from '../components/AuthGate';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import {
 	PLAIN_FORMATS,
@@ -124,11 +123,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function Create() {
-	return (
-		<AuthGate>
-			<CreateForm />
-		</AuthGate>
-	);
+	return <CreateForm />;
 }
 
 function CreateForm() {

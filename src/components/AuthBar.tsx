@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useConvexAuth, useQuery } from 'convex/react';
 import { Link, useFetcher, useLocation } from 'react-router';
 import { api } from '../../convex/_generated/api';
+import { safeReturnTo } from '../lib/returnTo';
 
 const control =
 	'font-ui rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-sun';
@@ -43,7 +44,7 @@ export function AuthBar() {
 	}
 
 	if (!isAuthenticated) {
-		const returnTo = `${location.pathname}${location.search}`;
+		const returnTo = safeReturnTo(`${location.pathname}${location.search}`);
 		return (
 			<Link className={control} to={`/signin?returnTo=${encodeURIComponent(returnTo)}`}>
 				Log in
