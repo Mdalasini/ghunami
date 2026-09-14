@@ -15,7 +15,6 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_fundFields from "../lib/fundFields.js";
 import type * as lib_fundId from "../lib/fundId.js";
 import type * as lib_richText from "../lib/richText.js";
-import type * as migrations from "../migrations.js";
 import type * as users from "../users.js";
 
 import type {
@@ -32,7 +31,6 @@ declare const fullApi: ApiFromModules<{
   "lib/fundFields": typeof lib_fundFields;
   "lib/fundId": typeof lib_fundId;
   "lib/richText": typeof lib_richText;
-  migrations: typeof migrations;
   users: typeof users;
 }>;
 

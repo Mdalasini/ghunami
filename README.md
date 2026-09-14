@@ -67,10 +67,6 @@ Before deploying:
 4. Tiny static files go in `tests/e2e/fixtures/`. Large binary inputs can be built in-memory in the spec.
 5. Restore env, clocks, mocks, and draft module state in `afterEach`.
 
-## User schema cleanup
-
-See [convex/MIGRATIONS.md](convex/MIGRATIONS.md) for the staged legacy-field migration and old-session compatibility notes before deploying the audit refactor.
-
 ## GitHub Actions
 
 `.github/workflows/ci.yml` runs typecheck, Vitest, build, and Playwright on push and pull request. It needs no repository secrets. After this workflow has run on the branch, the repo owner can require the resulting check name in GitHub branch protection or rulesets. The YAML file alone does not block merges.

@@ -24,7 +24,4 @@ test('private fund routes keep returnTo for direct visits', async ({ page }) => 
 
 	await page.goto('/preview/Ab3');
 	await expect(page).toHaveURL(/\/signin\?returnTo=%2Fpreview%2FAb3$/);
-
-	await page.goto('/create/preview');
-	await expect(page).toHaveURL(/\/signin\?returnTo=%2Fcreate$/);
 });

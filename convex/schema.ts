@@ -12,12 +12,7 @@ export default defineSchema({
 	users: defineTable({
 		tokenIdentifier: v.string(),
 		name: v.string(),
-		email: v.string(),
-		// Transitional validators for existing documents; see MIGRATIONS.md.
-		pictureUrl: v.optional(v.string()),
-		role: v.optional(v.union(v.literal('user'), v.literal('admin'))),
-		createdAt: v.optional(v.number()),
-		updatedAt: v.optional(v.number())
+		email: v.string()
 	}).index('by_token', ['tokenIdentifier']),
 
 	uploads: defineTable({
