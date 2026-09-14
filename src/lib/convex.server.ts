@@ -3,10 +3,7 @@ import { loadServerEnv } from './env.server';
 
 let client: ConvexHttpClient | null = null;
 
-/**
- * Unauthenticated server Convex client. Do not call setAuth on this singleton;
- * public loaders share it with WorkOS actions.
- */
+/** Server-side Convex client, used to reach the WorkOS actions. */
 export function convexServer(): ConvexHttpClient {
 	loadServerEnv();
 	if (!client) {

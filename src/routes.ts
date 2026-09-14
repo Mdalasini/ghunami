@@ -5,7 +5,6 @@ export default [
 	route('create', 'routes/create.tsx'),
 	route('create/preview', 'routes/create.preview.tsx'),
 	route('preview/:fundID', 'routes/preview.tsx'),
-	route('f/:fundID/:slug?', 'routes/f.tsx'),
 	route('funds', 'routes/funds.tsx'),
 	route('media/:fundID', 'routes/media.fund.ts'),
 	route('signin', 'routes/signin.tsx'),

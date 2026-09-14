@@ -104,11 +104,4 @@ describe('draft', () => {
 		expect(formatted).toMatch(/250,000/);
 		expect(formatted.toUpperCase()).toMatch(/KES|KSH/);
 	});
-
-	it('parses typed goal digits into a number and grouped text', async () => {
-		const { parseGoalText } = await loadDraft();
-		expect(parseGoalText('')).toEqual({ goal: null, text: '' });
-		expect(parseGoalText('ksh')).toEqual({ goal: null, text: '' });
-		expect(parseGoalText('075000')).toEqual({ goal: 75000, text: '75,000' });
-	});
 });

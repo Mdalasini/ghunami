@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Id } from '../../convex/_generated/dataModel';
 import type { CreateDraft } from '../../src/lib/draft';
-import { draftFromPreview, persistDraft } from '../../src/lib/persistFund';
+import { persistDraft } from '../../src/lib/persistFund';
 
 const draft = {
 	fundID: '',
@@ -42,87 +42,6 @@ describe('persistDraft', () => {
 				})
 			).rejects.toThrow(/title/);
 			expect(discardUpload).toHaveBeenCalledWith({ uploadId: coverUploadId });
-		} finally {
-			vi.unstubAllGlobals();
-		}
-	});
-
-	it('copies preview fields and loads a saved original when present', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async (url: string | URL | Request) => {
-				expect(String(url)).toBe('/media/Ab3?kind=original&v=9');
-				return new Response(new Blob([new Uint8Array(4)], { type: 'image/jpeg' }));
-			})
-		);
-		try {
-			const next = await draftFromPreview(
-				{
-					fundID: 'Ab3',
-					goal: 50_000,
-					title: 'Help Maya get home',
-					story: '<p>Raising travel money.</p>',
-					coverSkipped: false,
-					hasCover: true,
-					hasOriginal: true,
-					coverCrop: { x: 0, y: 0, width: 80, height: 80 },
-					coverName: 'cover.jpg',
-					updatedAt: 9
-				},
-				{ original: true }
-			);
-			expect(next).toMatchObject({
-				fundID: 'Ab3',
-				goal: 50_000,
-				title: 'Help Maya get home',
-				coverUrl: '/media/Ab3?v=9',
-				coverName: 'cover.jpg',
-				coverEdit: { crop: { x: 0, y: 0, width: 80, height: 80 } }
-			});
-			expect(next.coverEdit?.original.name).toBe('cover.jpg');
-		} finally {
-			vi.unstubAllGlobals();
-		}
-	});
-
-	it('skips fetching an original when the preview has none', async () => {
-		const fetchMock = vi.fn();
-		vi.stubGlobal('fetch', fetchMock);
-		try {
-			const next = await draftFromPreview({
-				fundID: 'Ab3',
-				goal: 50_000,
-				title: 'Help Maya get home',
-				story: '<p>Raising travel money.</p>',
-				coverSkipped: true,
-				hasCover: false,
-				hasOriginal: false
-			});
-			expect(fetchMock).not.toHaveBeenCalled();
-			expect(next).toMatchObject({ coverUrl: '', coverEdit: undefined, coverSkipped: true });
-		} finally {
-			vi.unstubAllGlobals();
-		}
-	});
-
-	it('does not fetch an original unless asked', async () => {
-		const fetchMock = vi.fn();
-		vi.stubGlobal('fetch', fetchMock);
-		try {
-			const next = await draftFromPreview({
-				fundID: 'Ab3',
-				goal: 50_000,
-				title: 'Help Maya get home',
-				story: '<p>Raising travel money.</p>',
-				coverSkipped: false,
-				hasCover: true,
-				hasOriginal: true,
-				coverCrop: { x: 0, y: 0, width: 80, height: 80 },
-				coverName: 'cover.jpg'
-			});
-			expect(fetchMock).not.toHaveBeenCalled();
-			expect(next.coverEdit).toBeUndefined();
-			expect(next.coverUrl).toBe('/media/Ab3');
 		} finally {
 			vi.unstubAllGlobals();
 		}

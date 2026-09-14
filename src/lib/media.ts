@@ -1,9 +1,5 @@
-export function coverMediaUrl(fundID: string, kind: 'cover' | 'original' = 'cover', version?: number) {
-	const params = new URLSearchParams();
-	if (kind === 'original') params.set('kind', 'original');
-	if (version !== undefined) params.set('v', String(version));
-	const query = params.toString();
-	return query ? `/media/${fundID}?${query}` : `/media/${fundID}`;
+export function coverMediaUrl(fundID: string, kind: 'cover' | 'original' = 'cover') {
+	return kind === 'original' ? `/media/${fundID}?kind=original` : `/media/${fundID}`;
 }
 
 export function convexSiteUrl(): string {

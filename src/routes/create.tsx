@@ -9,9 +9,10 @@ import {
 	useSyncExternalStore
 } from 'react';
 import { Link, useNavigate, useSearchParams, type LoaderFunctionArgs } from 'react-router';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { TITLE_MAX } from '../../convex/lib/fundFields';
+import { isFundID } from '../../convex/lib/fundId';
 import { AuthGate } from '../components/AuthGate';
 import { SiteHeader } from '../components/BrandLink';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
@@ -22,7 +23,8 @@ import {
 	type StoryFormats,
 	StoryToolbar
 } from '../components/StoryEditor';
-import { clearCover, formatGoal, getDraft, parseGoalText, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
+import { clearCover, formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft, type CreateDraft } from '../lib/draft';
+import { coverMediaUrl } from '../lib/media';
 import { persistDraft } from '../lib/persistFund';
 import { requireSession } from '../lib/requireSession';
 import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
@@ -133,6 +135,9 @@ function CreateForm() {
 	const draft = useSyncExternalStore(subscribeDraft, getDraft, getDraft);
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
+	const fundIDParam = searchParams.get('fundID') ?? '';
+	const editing = isFundID(fundIDParam);
+	const saved = useQuery(api.funds.getPreview, editing ? { fundID: fundIDParam } : 'skip');
 	const generateUploadUrl = useMutation(api.funds.generateUploadUrl);
 	const registerUpload = useMutation(api.funds.registerUpload);
 	const discardUpload = useMutation(api.funds.discardUpload);
@@ -141,12 +146,14 @@ function CreateForm() {
 
 	const requestedStep = Number(searchParams.get('step'));
 	const [step, setStep] = useState(() =>
-		draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
+		!editing && draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
 			? requestedStep : 1
 	);
+	const [returnToPreview, setReturnToPreview] = useState(searchParams.get('from') === 'preview');
 	const [direction, setDirection] = useState<Direction>('forward');
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState('');
+	const [ready, setReady] = useState(!editing);
 
 	const [goalText, setGoalText] = useState(() =>
 		draft.goal !== null ? draft.goal.toLocaleString('en-KE') : ''
@@ -158,6 +165,7 @@ function CreateForm() {
 	const fieldRef = useRef<HTMLInputElement>(null);
 	const storyRef = useRef<StoryEditorHandle>(null);
 	const okRef = useRef<HTMLButtonElement>(null);
+	const hydratedFor = useRef('');
 	const savingRef = useRef(false);
 
 	const current = STEPS[step - 1];
@@ -176,8 +184,61 @@ function CreateForm() {
 	const busy = coverBusy || saving;
 
 	useEffect(() => {
+		if (editing) return;
 		if (getDraft().fundID) resetDraft();
-	}, []);
+	}, [editing]);
+
+	useEffect(() => {
+		if (!editing) return;
+		if (saved === undefined) return;
+		if (saved === null) {
+			setReady(true);
+			return;
+		}
+		if (hydratedFor.current === saved.fundID) {
+			setReady(true);
+			return;
+		}
+		hydratedFor.current = saved.fundID;
+		let cancelled = false;
+		void (async () => {
+			resetDraft();
+			const next = {
+				fundID: saved.fundID,
+				goal: saved.goal,
+				title: saved.title,
+				story: saved.story,
+				coverSkipped: saved.coverSkipped,
+				coverUrl: saved.hasCover ? coverMediaUrl(saved.fundID) : '',
+				coverName: saved.coverName ?? '',
+				coverEdit: undefined as CreateDraft['coverEdit']
+			};
+			if (saved.hasOriginal && saved.coverCrop) {
+				try {
+					const response = await fetch(coverMediaUrl(saved.fundID, 'original'));
+					if (response.ok) {
+						const blob = await response.blob();
+						next.coverEdit = {
+							original: new File([blob], saved.coverName || 'photo', { type: blob.type }),
+							crop: saved.coverCrop
+						};
+					}
+				} catch {
+					// Crop editor can still use the saved cover image.
+				}
+			}
+			if (cancelled) return;
+			patchDraft(next);
+			setGoalText(saved.goal.toLocaleString('en-KE'));
+			if (requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)) {
+				setStep(requestedStep);
+			}
+			setReady(true);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [editing, saved, requestedStep]);
 
 	/* Each question arrives with the field ready to type into. */
 	useEffect(() => {
@@ -200,9 +261,15 @@ function CreateForm() {
 	const onStoryFormats = useCallback((formats: StoryFormats) => setStoryFormats(formats), []);
 
 	function parseGoal(value: string) {
-		const parsed = parseGoalText(value);
-		patchDraft({ goal: parsed.goal });
-		setGoalText(parsed.text);
+		const digits = value.replace(/[^\d]/g, '');
+		if (!digits) {
+			patchDraft({ goal: null });
+			setGoalText('');
+			return;
+		}
+		const amount = Number(digits);
+		patchDraft({ goal: amount > 0 ? amount : null });
+		setGoalText(amount.toLocaleString('en-KE'));
 	}
 
 	function pickSuggested(amount: number) {
@@ -241,7 +308,7 @@ function CreateForm() {
 	}
 
 	function advance() {
-		if (step === LAST) {
+		if (returnToPreview || step === LAST) {
 			void saveAndPreview();
 			return;
 		}
@@ -270,6 +337,7 @@ function CreateForm() {
 		if (busy) return;
 
 		if (step > 1) {
+			setReturnToPreview(false);
 			show(step - 1);
 		}
 	}
@@ -427,6 +495,26 @@ function CreateForm() {
 			);
 		}
 		return null;
+	}
+
+	if (editing && saved === null) {
+		return (
+			<div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-5 px-6">
+				<h1 className="text-3xl font-extrabold">Fund not found</h1>
+				<p className="text-mute">This draft isn’t available. It may have been removed, or it belongs to someone else.</p>
+				<Link to="/funds" className="btn-press self-start bg-accent text-card hover:bg-accent-deep">
+					My funds
+				</Link>
+			</div>
+		);
+	}
+
+	if (editing && !ready) {
+		return (
+			<div className="flex min-h-dvh flex-col items-center justify-center gap-4">
+				<p className="text-sm font-extrabold tracking-wider text-mute uppercase">Loading</p>
+			</div>
+		);
 	}
 
 	return (

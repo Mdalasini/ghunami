@@ -85,13 +85,6 @@ export function patchDraft(partial: Partial<CreateDraft>) {
 	emit();
 }
 
-export function parseGoalText(value: string): { goal: number | null; text: string } {
-	const digits = value.replace(/[^\d]/g, '');
-	if (!digits) return { goal: null, text: '' };
-	const amount = Number(digits);
-	return { goal: amount > 0 ? amount : null, text: amount.toLocaleString('en-KE') };
-}
-
 export function formatGoal(amount: number) {
 	return new Intl.NumberFormat('en-KE', {
 		style: 'currency',
