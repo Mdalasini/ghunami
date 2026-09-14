@@ -19,10 +19,10 @@ export function SiteHeader({
 }) {
 	return (
 		<header
-			className={`flex items-center gap-4 px-6 py-8 md:px-12 ${brand ? 'justify-between' : 'justify-end'}`}
+			className={`flex items-start gap-4 px-6 py-8 md:px-12 ${brand ? 'justify-between' : 'justify-end'}`}
 		>
 			{brand ? <BrandLink /> : null}
-			{children}
+			{children ? <div className="flex h-8 items-center">{children}</div> : null}
 		</header>
 	);
 }
