@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from 'convex/react';
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams, type LoaderFunctionArgs } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { isFundID } from '../../convex/lib/fundId';
@@ -30,12 +31,53 @@ function EditLink({ fundID, step, children }: { fundID: string; step: number; ch
 	);
 }
 
-function PublishBar({ fundID }: { fundID: string }) {
+function PublishControl({ fundID }: { fundID: string }) {
+	const [confirming, setConfirming] = useState(false);
+	const close = () => setConfirming(false);
+
+	return (
+		<>
+			<button
+				type="button"
+				className="rounded-full bg-accent px-3 py-1.5 text-xs font-extrabold tracking-wider text-card uppercase hover:bg-accent-deep"
+				aria-haspopup="dialog"
+				aria-expanded={confirming}
+				onClick={() => {
+					setConfirming(true);
+				}}
+			>
+				Set fund live
+			</button>
+			{confirming ? createPortal(<PublishDialog fundID={fundID} onCancel={close} />, document.body) : null}
+		</>
+	);
+}
+
+function PublishDialog({ fundID, onCancel }: { fundID: string; onCancel: () => void }) {
 	const publish = useMutation(api.funds.publish);
 	const navigate = useNavigate();
-	const [confirming, setConfirming] = useState(false);
+	const titleId = useId();
+	const panelRef = useRef<HTMLDivElement>(null);
+	const pendingRef = useRef(false);
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState('');
+	const [armed, setArmed] = useState(false);
+	pendingRef.current = pending;
+
+	useEffect(() => {
+		const arm = window.setTimeout(() => setArmed(true), 0);
+		const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		panelRef.current?.querySelector('button')?.focus();
+		function onKey(event: KeyboardEvent) {
+			if (event.key === 'Escape' && !pendingRef.current) onCancel();
+		}
+		document.addEventListener('keydown', onKey);
+		return () => {
+			window.clearTimeout(arm);
+			document.removeEventListener('keydown', onKey);
+			previous?.focus();
+		};
+	}, [onCancel]);
 
 	async function confirm() {
 		if (pending) return;
@@ -50,59 +92,51 @@ function PublishBar({ fundID }: { fundID: string }) {
 		}
 	}
 
-	if (!confirming) {
-		return (
-			<div className="border-b border-line bg-sun/60 px-6 py-3 text-center">
-				<p className="text-xs font-bold text-mute">This is a preview. Nothing is public yet.</p>
-				<p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-hint">
-					Setting the fund live makes this page and its cover visible to anyone with the link.
-				</p>
-				<button
-					type="button"
-					className="btn-press mx-auto mt-3 bg-accent px-5 text-card hover:bg-accent-deep"
-					onClick={() => setConfirming(true)}
-					aria-expanded={false}
-				>
-					Set fund live
-				</button>
-			</div>
-		);
-	}
-
 	return (
-		<div className="border-b border-line bg-sun/60 px-6 py-4" role="region" aria-labelledby="publish-confirm-title">
-			<p id="publish-confirm-title" className="text-center text-sm font-extrabold">
-				Set this fund live?
-			</p>
-			<p className="mx-auto mt-2 max-w-md text-center text-xs leading-relaxed text-mute">
-				Anyone with the link will be able to see the fund and its cover photo. You can keep editing afterwards.
-			</p>
-			{error ? (
-				<p className="mt-2 text-center text-sm font-bold text-error" role="alert">
-					{error}
+		<div className="fixed inset-0 z-30 flex items-center justify-center px-6">
+			<button
+				type="button"
+				className="absolute inset-0 bg-ink/40"
+				aria-label="Cancel publishing"
+				disabled={pending || !armed}
+				onClick={onCancel}
+			/>
+			<div
+				ref={panelRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={titleId}
+				className="relative w-full max-w-md rounded-3xl border border-line bg-card p-8 shadow-[0_16px_40px_-16px_rgb(15_26_18/0.35)]"
+			>
+				<h2 id={titleId} className="text-2xl font-extrabold tracking-[-0.03em]">
+					Set this fund live?
+				</h2>
+				<p className="mt-3 text-sm leading-relaxed text-mute">
+					Anyone with the link will be able to see the fund and its cover photo. You can keep editing afterwards.
 				</p>
-			) : null}
-			<div className="mt-3 flex flex-wrap justify-center gap-3">
-				<button
-					type="button"
-					disabled={pending}
-					className="btn-press border-2 border-line bg-card px-5 text-accent [--btn-edge:var(--color-line)]"
-					onClick={() => {
-						if (pending) return;
-						setConfirming(false);
-						setError('');
-					}}
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					disabled={pending}
-					className="btn-press bg-accent px-5 text-card hover:bg-accent-deep"
-					onClick={() => void confirm()}
-				>
-					{pending ? 'Publishing…' : 'Set fund live'}
-				</button>
+				{error ? (
+					<p className="mt-3 text-sm font-bold text-error" role="alert">
+						{error}
+					</p>
+				) : null}
+				<div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+					<button
+						type="button"
+						disabled={pending}
+						className="btn-press border-2 border-line bg-card px-5 text-accent [--btn-edge:var(--color-line)]"
+						onClick={onCancel}
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						disabled={pending}
+						className="btn-press bg-accent px-5 text-card hover:bg-accent-deep"
+						onClick={() => void confirm()}
+					>
+						{pending ? 'Publishing…' : 'Set fund live'}
+					</button>
+				</div>
 			</div>
 		</div>
 	);
@@ -130,19 +164,16 @@ export default function FundPreview() {
 		<AuthGate>
 			<div className="flex min-h-dvh flex-col">
 				<SiteHeader>
-					<div className="flex items-center gap-2">
-						<span className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-mute">
-							{live ? 'Live fund' : 'Draft preview'}
-						</span>
-						{live && fund ? (
-							<Link
-								to={fundPath(fund.fundID, fund.title)}
-								className="rounded-full bg-accent px-3 py-1.5 text-xs font-extrabold tracking-wider text-card uppercase hover:bg-accent-deep"
-							>
-								View live fund
-							</Link>
-						) : null}
-					</div>
+					{live && fund ? (
+						<Link
+							to={fundPath(fund.fundID, fund.title)}
+							className="rounded-full bg-accent px-3 py-1.5 text-xs font-extrabold tracking-wider text-card uppercase hover:bg-accent-deep"
+						>
+							View live fund
+						</Link>
+					) : fund && !live ? (
+						<PublishControl fundID={fund.fundID} />
+					) : null}
 				</SiteHeader>
 				{!valid || fund === null ? (
 					<Missing />
@@ -156,9 +187,7 @@ export default function FundPreview() {
 							<p className="border-b border-line bg-sun/60 px-6 py-2.5 text-center text-xs font-bold text-mute">
 								This fund is live. Edits you make here change the public page.
 							</p>
-						) : (
-							<PublishBar fundID={fund.fundID} />
-						)}
+						) : null}
 						<main className="slide-forward mx-auto w-full max-w-6xl flex-1 px-6 pt-8 pb-48 md:pt-12 lg:pb-20">
 							<div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-12">
 								<article className="min-w-0">
