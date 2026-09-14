@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { HorizonDisc } from './Tip';
+import { HorizonDisc } from './HorizonMark';
 
 /**
  * Every auth screen sits on the same centred column: Horizon disc, display

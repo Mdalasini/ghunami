@@ -143,7 +143,7 @@ export function StoryEditor({
 	return (
 		<div
 			ref={editor}
-			className="story-rich rich-editor field-bare max-h-[40dvh] overflow-y-auto py-1.5 text-base leading-relaxed outline-none"
+			className="story-rich rich-editor field-bare max-h-[40dvh] overflow-y-auto py-1.5 text-xl leading-relaxed outline-none"
 			role="textbox"
 			aria-label="Story"
 			aria-multiline="true"

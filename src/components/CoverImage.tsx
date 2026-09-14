@@ -8,7 +8,7 @@ export function CoverImage({
 	className?: string;
 }) {
 	return (
-		<div className={`aspect-[4/5] overflow-hidden ${className}`.trim()}>
+		<div className={`aspect-[5/4] overflow-hidden ${className}`.trim()}>
 			<img src={src} alt={alt} className="h-full w-full object-cover" />
 		</div>
 	);

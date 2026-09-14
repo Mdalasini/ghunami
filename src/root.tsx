@@ -10,7 +10,7 @@ import {
 } from 'react-router';
 import type { Route } from './+types/root';
 import { ConvexClientProvider } from './components/ConvexClientProvider';
-import { HorizonDisc } from './components/Tip';
+import { HorizonDisc } from './components/HorizonMark';
 import './index.css';
 
 export const links: Route.LinksFunction = () => [

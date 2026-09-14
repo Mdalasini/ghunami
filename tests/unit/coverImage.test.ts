@@ -89,7 +89,7 @@ describe('cover image validation', () => {
 });
 
 describe('crop resolution', () => {
-	it.each([[720, 900], [1080, 1350], [4000, 2000], [800, 2200], [12000, 16000]])(
+	it.each([[900, 720], [1350, 1080], [2000, 4000], [2200, 800], [16000, 12000]])(
 		'keeps the maximum zoom sharp for a %i×%i original',
 		(width, height) => {
 			const zoom = maxCoverZoom(width, height);
@@ -100,18 +100,18 @@ describe('crop resolution', () => {
 		}
 	);
 
-	it.each([[600, 750], [200, 250], [4000, 674], [719, 900]])(
+	it.each([[750, 600], [250, 200], [674, 4000], [900, 719]])(
 		'disables zoom for a low-resolution %i×%i original',
 		(width, height) => expect(maxCoverZoom(width, height)).toBe(1)
 	);
 
 	it('gives no zoom headroom when the widest crop is only just sharp', () => {
-		expect(maxCoverZoom(720, 900)).toBe(1);
-		expect(maxCoverZoom(721, 901)).toBe(1);
+		expect(maxCoverZoom(900, 720)).toBe(1);
+		expect(maxCoverZoom(901, 721)).toBe(1);
 	});
 
 	it('keeps the crop sharp at the limit even after rounding shaves a pixel off each edge', () => {
-		const originals: Array<[number, number]> = [[1000, 1250], [1080, 1350], [3024, 4032], [4032, 3024], [1200, 1200]];
+		const originals: Array<[number, number]> = [[1250, 1000], [1350, 1080], [4032, 3024], [3024, 4032], [1200, 1200]];
 		for (const [width, height] of originals) {
 			const zoom = maxCoverZoom(width, height);
 			const cropWidth = Math.min(width, height * COVER_ASPECT) / zoom;
@@ -121,14 +121,14 @@ describe('crop resolution', () => {
 	});
 
 	it('derives the limit from the crop the cropper actually shows at zoom 1', () => {
-		// A 4000×3000 original shown as a 677.33×508 preview in a 406×508 crop window: the crop is 2400×3000 px.
-		const base = zoomOneCrop({ width: 406, height: 508 }, { width: 677.33, height: 508 }, { width: 4000, height: 3000 });
-		expect(base.width).toBeCloseTo(2398, 0);
-		expect(base.height).toBe(3000);
+		// A 3000×4000 original shown as a 508×677.33 preview in a 508×406 crop window: the crop is 3000×2400 px.
+		const base = zoomOneCrop({ width: 508, height: 406 }, { width: 508, height: 677.33 }, { width: 3000, height: 4000 });
+		expect(base.width).toBe(3000);
+		expect(base.height).toBeCloseTo(2398, 0);
 		expect(coverZoomLimit(base.width, base.height)).toBe(3.32);
-		expect(coverZoomLimit(720, 900)).toBe(1);
-		expect(coverZoomLimit(600, 750)).toBe(1);
-		expect(coverZoomLimit(8000, 10000)).toBe(4);
+		expect(coverZoomLimit(900, 720)).toBe(1);
+		expect(coverZoomLimit(750, 600)).toBe(1);
+		expect(coverZoomLimit(10000, 8000)).toBe(4);
 	});
 
 	it('returns an empty crop when the cropper has not measured anything yet', () => {
@@ -149,23 +149,23 @@ describe('crop resolution', () => {
 		expect(zoomToPercent(2, 1)).toBe(0);
 		expect(percentToZoom(50, 1)).toBe(1);
 	});
-	it('treats 720×900 and above as sharp', () => {
-		expect(assessCropResolution(720, 900)).toBe('ok');
-		expect(assessCropResolution(1080, 1350)).toBe('ok');
-		expect(assessCropResolution(2000, 2500)).toBe('ok');
+	it('treats 900×720 and above as sharp', () => {
+		expect(assessCropResolution(900, 720)).toBe('ok');
+		expect(assessCropResolution(1350, 1080)).toBe('ok');
+		expect(assessCropResolution(2500, 2000)).toBe('ok');
 	});
 
-	it('warns between 540×675 and just under 720×900', () => {
-		expect(assessCropResolution(540, 675)).toBe('soft');
-		expect(assessCropResolution(719, 899)).toBe('soft');
-		expect(assessCropResolution(720, 899)).toBe('soft');
-		expect(assessCropResolution(719, 900)).toBe('soft');
+	it('warns between 675×540 and just under 900×720', () => {
+		expect(assessCropResolution(675, 540)).toBe('soft');
+		expect(assessCropResolution(899, 719)).toBe('soft');
+		expect(assessCropResolution(899, 720)).toBe('soft');
+		expect(assessCropResolution(900, 719)).toBe('soft');
 	});
 
-	it('blocks when either cropped edge is under 540×675', () => {
-		expect(assessCropResolution(539, 674)).toBe('too_small');
-		expect(assessCropResolution(539, 900)).toBe('too_small');
-		expect(assessCropResolution(720, 674)).toBe('too_small');
+	it('blocks when either cropped edge is under 675×540', () => {
+		expect(assessCropResolution(674, 539)).toBe('too_small');
+		expect(assessCropResolution(900, 539)).toBe('too_small');
+		expect(assessCropResolution(674, 720)).toBe('too_small');
 		expect(assessCropResolution(1, 1)).toBe('too_small');
 	});
 
@@ -223,7 +223,7 @@ describe('cover canvas processing', () => {
 	const context = { clearRect: vi.fn(), drawImage: vi.fn() };
 	const toBlob = vi.fn();
 	const canvas = { width: 0, height: 0, getContext: vi.fn(), toBlob };
-	const bitmap = { width: 2000, height: 2500, close: vi.fn() } as unknown as ImageBitmap;
+	const bitmap = { width: 2500, height: 2000, close: vi.fn() } as unknown as ImageBitmap;
 
 	beforeEach(() => {
 		canvas.getContext.mockReturnValue(context);
@@ -264,9 +264,9 @@ describe('cover canvas processing', () => {
 	it('returns the file directly and draws original pixels at the fixed output size', async () => {
 		const result = await processCoverCrop(bitmap, { x: 10, y: 20, width: 50, height: 50 }, 'photo.jpg');
 		expect(result).toBeInstanceOf(File);
-		expect(canvas.width).toBe(1080);
-		expect(canvas.height).toBe(1350);
-		expect(context.drawImage).toHaveBeenCalledWith(bitmap, 200, 500, 1000, 1250, 0, 0, 1080, 1350);
+		expect(canvas.width).toBe(1350);
+		expect(canvas.height).toBe(1080);
+		expect(context.drawImage).toHaveBeenCalledWith(bitmap, 250, 400, 1250, 1000, 0, 0, 1350, 1080);
 	});
 
 	it('blocks an undersized clamped crop before allocating a canvas', async () => {
@@ -293,7 +293,7 @@ describe('cover canvas processing', () => {
 	it('revokes the preview URL and tolerates an already closed bitmap', () => {
 		const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 		vi.mocked(bitmap.close).mockImplementation(() => { throw new Error('already closed'); });
-		expect(() => releaseDecodedCover({ bitmap, previewUrl: 'blob:preview', width: 2000, height: 2500 })).not.toThrow();
+		expect(() => releaseDecodedCover({ bitmap, previewUrl: 'blob:preview', width: 2500, height: 2000 })).not.toThrow();
 		expect(revoke).toHaveBeenCalledWith('blob:preview');
 	});
 });
