@@ -189,6 +189,15 @@ describe('funds auth and ownership', () => {
 		expect(preview?.title).toBe('Duplicate');
 		expect(preview?.hasCover).toBe(true);
 		expect(preview?.story).toBe('<p>Hello <strong>there</strong></p>');
+
+		expect(
+			await owner.mutation(api.funds.create, { ...draft, coverSkipped: true, title: 'No photo' })
+		).toBe(a);
+		expect(await owner.query(api.funds.getPreview, { fundID: a })).toMatchObject({
+			title: 'No photo',
+			hasCover: false,
+			coverSkipped: true
+		});
 	});
 
 	it('rejects invalid fields', async () => {

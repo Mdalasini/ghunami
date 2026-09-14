@@ -245,7 +245,7 @@ export const create = mutation({
 		if (existing) {
 			return await writeOwnedFund(ctx, user._id, existing, {
 				...args,
-				cover: args.coverUploadId ? 'replace' : 'keep'
+				cover: args.coverUploadId ? 'replace' : args.coverSkipped ? 'clear' : 'keep'
 			});
 		}
 
