@@ -1,5 +1,3 @@
-import type { ReactNode } from 'react';
-
 export function HorizonMark({ className }: { className: string }) {
 	return (
 		<svg viewBox="76 114 248 188" className={className} fill="currentColor" aria-hidden="true">
@@ -18,15 +16,5 @@ export function HorizonDisc({ className }: { className: string }) {
 		>
 			<HorizonMark className="h-4 w-auto" />
 		</span>
-	);
-}
-
-/* A received-side helper bubble. Render it inside a message group; the group draws the avatar. */
-export function Tip({ title, children }: { title: string; children: ReactNode }) {
-	return (
-		<aside className="bubble-in min-w-0 self-start rounded-3xl bg-card px-5 py-4 text-mute">
-			<p className="text-sm font-bold text-ink">{title}</p>
-			<div className="mt-1.5 text-sm leading-relaxed">{children}</div>
-		</aside>
 	);
 }
