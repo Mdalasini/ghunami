@@ -123,7 +123,7 @@ test('keeps simple story formatting', async ({ page }) => {
 	await expect(page.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
 	await expect(page.getByText(/^\d+ \/ 4000$/)).toHaveText('15 / 4000');
 	await expect(story.locator('h1')).toHaveText('Maya');
-	await expect(story.locator('strong')).toHaveText('help');
+	await expect(story.locator('strong, b')).toHaveText('help');
 });
 
 test('rejects an empty goal and an unsupported or oversized cover', async ({ page }) => {
