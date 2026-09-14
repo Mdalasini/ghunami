@@ -1,52 +1,21 @@
-import {
-	type ChangeEvent,
-	type KeyboardEvent,
-	useCallback,
-	useEffect,
-	useId,
-	useRef,
-	useState,
-	useSyncExternalStore
-} from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { TITLE_MAX } from '../../convex/lib/fundFields';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from './CoverPhotoField';
-import { Modal } from './Modal';
 import {
-	PLAIN_FORMATS,
-	StoryEditor,
-	type StoryEditorHandle,
-	type StoryFormats,
-	StoryToolbar
-} from './StoryEditor';
-import { clearCover, formatGoal, getDraft, parseGoalText, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
+	FIELD_COPY,
+	GoalField,
+	StoryField,
+	TitleField,
+	canSaveField,
+	type FundField
+} from './FundFields';
+import { Modal } from './Modal';
+import { PLAIN_FORMATS, type StoryEditorHandle, type StoryFormats } from './StoryEditor';
+import { clearCover, getDraft, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
 import { draftFromPreview, persistDraft, type PreviewFundDraft } from '../lib/persistFund';
-import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
 
-export type EditField = 'goal' | 'cover' | 'title' | 'story';
-
-const COPY: Record<EditField, { title: string; sub: string }> = {
-	goal: {
-		title: 'Fundraising goal',
-		sub: 'Pick a starting number for your goal. You can update this later as things change.'
-	},
-	cover: {
-		title: 'Cover image',
-		sub: 'A clear photo of the person or place helps more than a logo. Use a clear, bright photo. If possible, pick one from a happier time.'
-	},
-	title: {
-		title: 'Fundraiser title',
-		sub: 'Say who it’s for and the action, like “Help Maya get home”. A good title mentions who or what it’s for, and the action.'
-	},
-	story: {
-		title: 'Fundraiser story',
-		sub: 'Use plain words. Explain who it’s for, and what the money does.'
-	}
-};
-
-const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
-const underline = 'border-b-2 border-line pb-2 transition-colors duration-150 focus-within:border-accent';
+export type EditField = FundField;
 
 export function EditFundDialog({
 	fund,
@@ -63,7 +32,7 @@ export function EditFundDialog({
 	const discardUpload = useMutation(api.funds.discardUpload);
 	const updateFund = useMutation(api.funds.update);
 	const titleId = useId();
-	const copy = COPY[field];
+	const copy = FIELD_COPY[field];
 	const [ready, setReady] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [saveError, setSaveError] = useState('');
@@ -93,12 +62,7 @@ export function EditFundDialog({
 		};
 	}, [saved, field]);
 
-	const storyChars = storyLength(draft.story);
-	const canSave =
-		(field === 'goal' && draft.goal !== null && draft.goal > 0) ||
-		(field === 'cover' && coverReady) ||
-		(field === 'title' && draft.title.trim().length > 0) ||
-		(field === 'story' && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX);
+	const canSave = canSaveField(field, draft, coverReady);
 	const busy = coverBusy || saving;
 	const showSkip = field === 'cover' && !coverReady && !busy && ready;
 
@@ -123,9 +87,6 @@ export function EditFundDialog({
 				generateUploadUrl: () => generateUploadUrl({}),
 				registerUpload: (args) => registerUpload(args),
 				discardUpload: (args) => discardUpload(args),
-				create: async () => {
-					throw new Error('Fund not found');
-				},
 				update: (args) => updateFund(args)
 			});
 			resetDraft();
@@ -158,25 +119,6 @@ export function EditFundDialog({
 		if (!event.ctrlKey && !event.metaKey && !event.altKey) void save();
 	}
 
-	function onTextKeydown(event: KeyboardEvent<HTMLInputElement>) {
-		if (event.key === 'Enter' && (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey)) {
-			event.preventDefault();
-		}
-	}
-
-	function onGoalKeydown(event: KeyboardEvent<HTMLInputElement>) {
-		onTextKeydown(event);
-		if (event.key.length === 1 && !/[0-9]/.test(event.key) && !event.metaKey && !event.ctrlKey) {
-			event.preventDefault();
-		}
-	}
-
-	function onGoalInput(event: ChangeEvent<HTMLInputElement>) {
-		const parsed = parseGoalText(event.currentTarget.value);
-		patchDraft({ goal: parsed.goal });
-		setGoalText(parsed.text);
-	}
-
 	return (
 		<Modal
 			titleId={titleId}
@@ -198,45 +140,13 @@ export function EditFundDialog({
 					}}
 				>
 					{field === 'goal' ? (
-						<>
-							<label className={`flex items-center gap-3 ${underline}`}>
-								<span className="sr-only">Goal in Kenyan shillings</span>
-								<span className="shrink-0 text-xl font-extrabold text-accent md:text-2xl" aria-hidden="true">
-									Ksh
-								</span>
-								<input
-									ref={fieldRef}
-									className="field-bare min-w-0 flex-1 text-2xl font-extrabold tracking-[-0.02em] placeholder:font-medium md:text-3xl"
-									inputMode="numeric"
-									autoComplete="off"
-									placeholder="Type your answer here..."
-									value={goalText}
-									onChange={onGoalInput}
-									onKeyDown={onGoalKeydown}
-								/>
-							</label>
-							<div className="flex flex-wrap gap-2" role="group" aria-label="Suggested goals">
-								{SUGGESTED.map((amount) => (
-									<button
-										key={amount}
-										type="button"
-										className={`rounded-full border-2 px-4 py-2 text-sm font-bold transition-[color,background-color,border-color,transform] duration-150 active:scale-95 ${
-											draft.goal === amount
-												? 'border-accent bg-accent text-card'
-												: 'border-line bg-card text-accent hover:border-accent'
-										}`}
-										aria-pressed={draft.goal === amount}
-										onClick={() => {
-											patchDraft({ goal: amount });
-											setGoalText(amount.toLocaleString('en-KE'));
-											fieldRef.current?.focus({ preventScroll: true });
-										}}
-									>
-										{formatGoal(amount)}
-									</button>
-								))}
-							</div>
-						</>
+						<GoalField
+							goal={draft.goal}
+							goalText={goalText}
+							setGoalText={setGoalText}
+							fieldRef={fieldRef}
+							suggestedClassName="flex flex-wrap gap-2"
+						/>
 					) : null}
 					{field === 'cover' ? (
 						<CoverPhotoField
@@ -247,44 +157,21 @@ export function EditFundDialog({
 						/>
 					) : null}
 					{field === 'title' ? (
-						<>
-							<label className={`flex items-center ${underline}`}>
-								<span className="sr-only">Title</span>
-								<input
-									ref={fieldRef}
-									className="field-bare min-w-0 flex-1 text-2xl font-bold tracking-[-0.01em] placeholder:font-medium md:text-3xl"
-									maxLength={TITLE_MAX}
-									autoComplete="off"
-									placeholder="Type your answer here..."
-									value={draft.title}
-									onChange={(event) => patchDraft({ title: event.currentTarget.value })}
-									onKeyDown={onTextKeydown}
-								/>
-							</label>
-							<p className="text-xs font-medium text-hint tabular-nums">
-								{draft.title.length} / {TITLE_MAX}
-							</p>
-						</>
+						<TitleField
+							title={draft.title}
+							fieldRef={fieldRef}
+							counterClassName="text-xs font-medium text-hint tabular-nums"
+						/>
 					) : null}
 					{field === 'story' ? (
-						<>
-							<StoryToolbar formats={storyFormats} editor={storyRef} />
-							<div className={underline}>
-								<StoryEditor
-									ref={storyRef}
-									value={draft.story}
-									onChange={(story) => patchDraft({ story })}
-									onFormatsChange={onStoryFormats}
-									onKeyDown={onStoryKeydown}
-									placeholder="Type your answer here..."
-								/>
-							</div>
-							<p
-								className={`text-right text-xs font-medium tabular-nums ${storyChars > STORY_MAX ? 'font-bold text-error' : 'text-hint'}`}
-							>
-								{storyChars} / {STORY_MAX}
-							</p>
-						</>
+						<StoryField
+							value={draft.story}
+							formats={storyFormats}
+							editor={storyRef}
+							onChange={(story) => patchDraft({ story })}
+							onFormatsChange={onStoryFormats}
+							onKeyDown={onStoryKeydown}
+						/>
 					) : null}
 					<div className="flex flex-wrap items-center gap-3">
 						<button

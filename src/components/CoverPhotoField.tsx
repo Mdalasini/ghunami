@@ -235,14 +235,6 @@ export function CoverPhotoField({
 			return coverUrl !== '';
 		}
 
-		const pixels = percentCropToPixels(cropPercent, decoded.width, decoded.height);
-		const quality = assessCropResolution(pixels.width, pixels.height);
-		if (quality === 'too_small') {
-			setError(COVER_MESSAGES.tooSmall);
-			setWarning('');
-			return false;
-		}
-
 		const original = originalRef.current;
 		setProcessing(true);
 		try {

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { CoverImage } from './CoverImage';
 import { HorizonDisc } from './HorizonMark';
 import { formatGoal } from '../lib/draft';
@@ -129,15 +129,13 @@ export function FundCover({
 	coverUrl,
 	organiser,
 	emptyTitle,
-	emptyHint,
-	badge
+	emptyHint
 }: {
 	title: string;
 	coverUrl: string;
 	organiser: string;
 	emptyTitle: string;
 	emptyHint: string;
-	badge?: ReactNode;
 }) {
 	return (
 		<div className="relative">
@@ -162,7 +160,6 @@ export function FundCover({
 					<strong className="font-bold">{organiser}</strong>
 				</span>
 			</p>
-			{badge}
 		</div>
 	);
 }

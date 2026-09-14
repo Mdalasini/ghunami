@@ -6,7 +6,7 @@ export const MAX_COVER_UPLOAD_BYTES = 25 * 1024 * 1024;
 export const MAX_COVER_OUTPUT_BYTES = 1 * 1024 * 1024;
 export const IDEMPOTENCY_KEY_PATTERN = /^[\w-]{8,64}$/;
 
-const COVER_TYPES = new Set([
+export const COVER_TYPES = new Set([
 	'image/jpeg',
 	'image/jpg',
 	'image/pjpeg',
@@ -14,7 +14,7 @@ const COVER_TYPES = new Set([
 	'image/webp'
 ]);
 
-const ORIGINAL_TYPES = new Set([
+export const ORIGINAL_TYPES = new Set([
 	...COVER_TYPES,
 	'image/heic',
 	'image/heif',
