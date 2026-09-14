@@ -341,42 +341,19 @@ export function CoverPhotoField({
 				</button>
 			) : (
 				<div
-					className="relative overflow-hidden rounded-3xl border-2 border-line bg-card"
-					style={showViewport ? {
-						width: 'min(100%, 24rem, max(11rem, calc(62dvh - 220px)))',
-						marginInline: 'auto'
-					} : undefined}
+					className="relative flex overflow-hidden rounded-3xl border-2 border-line bg-card"
 					onDragOver={onDragOver}
 					onDragLeave={() => setDragging(false)}
 					onDrop={onDrop}
 				>
-					{!processing && (
-						<button
-							type="button"
-							className="absolute top-3 right-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-card/95 text-ink shadow-md transition-colors hover:bg-card hover:text-error"
-							onClick={clear}
-							aria-label="Remove photo"
-						>
-							<svg
-								viewBox="0 0 16 16"
-								className="h-4 w-4"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2.4"
-								strokeLinecap="round"
-								aria-hidden="true"
-							>
-								<path d="M3 3l10 10M13 3L3 13" />
-							</svg>
-						</button>
-					)}
-					{showViewport ? (
-						<div className="relative">
-							<div
-								ref={cropViewport}
-								className="relative w-full overflow-hidden bg-ink"
-								style={{ aspectRatio: COVER_ASPECT }}
-							>
+					{/* The photo column. Its width sets the card's height, so the OK button stays in view below. */}
+					<div
+						ref={cropViewport}
+						className="relative w-40 shrink-0 overflow-hidden bg-ink md:w-52"
+						style={{ aspectRatio: COVER_ASPECT }}
+					>
+						{showViewport ? (
+							<>
 								{pending && client && cropSize ? (
 									<Suspense
 										fallback={
@@ -439,58 +416,64 @@ export function CoverPhotoField({
 										</p>
 									</div>
 								)}
+							</>
+						) : (
+							<CoverImage src={coverUrl} alt="Your cover" className="h-full w-full" />
+						)}
+					</div>
+					<div className="flex min-w-0 flex-1 flex-col justify-center gap-3 px-5 py-4">
+						{pending && canZoom && (
+							<label className="flex items-center gap-3">
+								<span className="text-xs font-extrabold tracking-wider text-mute uppercase">Zoom</span>
+								<input
+									type="range"
+									min={0}
+									max={100}
+									step={0.5}
+									value={zoomToPercent(zoom, maxZoom)}
+									onChange={(event) =>
+										changeZoom(percentToZoom(Number(event.currentTarget.value), maxZoom))
+									}
+									className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-accent)]"
+									aria-label="Zoom photo"
+									aria-valuetext={`${zoom.toFixed(2)}×`}
+									aria-describedby="cover-crop-help"
+								/>
+							</label>
+						)}
+						{pending && error ? (
+							<p className="text-sm font-medium text-error" role="alert">
+								{error}
+							</p>
+						) : pending && warning ? (
+							<p className="text-sm font-medium text-mute" role="status" aria-live="polite">
+								{warning}
+							</p>
+						) : (
+							<p id="cover-crop-help" className="text-sm text-mute">
+								{pending ? helper : reading ? 'Reading photo' : 'Your cover photo'}
+							</p>
+						)}
+						{!processing && (
+							<div className="flex flex-wrap gap-2">
+								<button
+									type="button"
+									className="rounded-full border-2 border-line bg-card px-4 py-1.5 text-xs font-extrabold tracking-wider text-accent uppercase transition-colors hover:border-accent"
+									onClick={() => fileInput.current?.click()}
+								>
+									Change photo
+								</button>
+								<button
+									type="button"
+									className="rounded-full px-3 py-1.5 text-xs font-extrabold tracking-wider text-mute uppercase transition-colors hover:bg-paper hover:text-error"
+									onClick={clear}
+								>
+									Remove photo
+								</button>
 							</div>
-							{/* Fixed height whether or not the slider is shown, so the card never jumps. */}
-							<div className="flex min-h-[5.25rem] flex-col justify-center gap-2 px-5 py-3">
-								{pending && canZoom && (
-									<label className="flex items-center gap-3">
-										<span className="text-xs font-extrabold tracking-wider text-mute uppercase">
-											Zoom
-										</span>
-										<input
-											type="range"
-											min={0}
-											max={100}
-											step={0.5}
-											value={zoomToPercent(zoom, maxZoom)}
-											onChange={(event) =>
-												changeZoom(percentToZoom(Number(event.currentTarget.value), maxZoom))
-											}
-											className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[var(--color-accent)]"
-											aria-label="Zoom photo"
-											aria-valuetext={`${zoom.toFixed(2)}×`}
-											aria-describedby="cover-crop-help"
-										/>
-									</label>
-								)}
-								{pending && error ? (
-									<p className="text-sm font-medium text-error" role="alert">
-										{error}
-									</p>
-								) : pending && warning ? (
-									<p className="text-sm font-medium text-mute" role="status" aria-live="polite">
-										{warning}
-									</p>
-								) : (
-									<p id="cover-crop-help" className="text-sm text-mute">
-										{pending ? helper : 'Reading photo'}
-									</p>
-								)}
-							</div>
-						</div>
-					) : (
-						<CoverImage src={coverUrl} alt="Your cover" className="mx-auto w-full max-w-[16rem]" />
-					)}
+						)}
+					</div>
 				</div>
-			)}
-			{hasAttachment && !processing && (
-				<button
-					type="button"
-					className="self-start rounded-full px-3 py-1 text-xs font-extrabold tracking-wider text-accent uppercase hover:bg-card"
-					onClick={() => fileInput.current?.click()}
-				>
-					Change photo
-				</button>
 			)}
 			{!showViewport && message ? (
 				error ? (

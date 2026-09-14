@@ -354,7 +354,7 @@ export default function Create() {
 						</span>
 						<input
 							ref={fieldRef}
-							className="field-bare min-w-0 flex-1 text-2xl font-extrabold tracking-[-0.02em] md:text-3xl"
+							className="field-bare min-w-0 flex-1 text-2xl font-extrabold tracking-[-0.02em] placeholder:font-medium md:text-3xl"
 							inputMode="numeric"
 							autoComplete="off"
 							placeholder="Type your answer here..."
@@ -400,7 +400,7 @@ export default function Create() {
 						<span className="sr-only">Title</span>
 						<input
 							ref={fieldRef}
-							className="field-bare min-w-0 flex-1 text-2xl font-bold tracking-[-0.01em] md:text-3xl"
+							className="field-bare min-w-0 flex-1 text-2xl font-bold tracking-[-0.01em] placeholder:font-medium md:text-3xl"
 							maxLength={TITLE_MAX}
 							autoComplete="off"
 							placeholder="Type your answer here..."
