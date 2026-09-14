@@ -67,7 +67,7 @@ textarea {
 	opacity: 1;
 }
 
-/* Bare field: the surrounding bubble carries the border and focus state. */
+/* Bare field: the underline around it carries the border and focus state. */
 @utility field-bare {
 	@apply block w-full border-0 bg-transparent p-0 focus:ring-0;
 }
@@ -89,16 +89,20 @@ textarea {
 	cursor: not-allowed;
 }
 
-/* The compose bubble carries focus for its bare fields, including the story editor. */
+/* The underline carries focus for bare fields, including the story editor. */
 :focus-visible:not(input):not(textarea):not(select):not(.rich-editor) {
 	outline: 3px solid var(--color-accent);
 	outline-offset: 3px;
 }
 
-@keyframes fly-in {
+/*
+ * One question at a time. Moving on slides the next question up from below; going back
+ * brings the previous one down from above.
+ */
+@keyframes slide-forward {
 	from {
 		opacity: 0;
-		transform: translateY(16px);
+		transform: translateY(48px);
 	}
 	to {
 		opacity: 1;
@@ -106,54 +110,10 @@ textarea {
 	}
 }
 
-/* Sent bubbles lift out of the composer, like a message leaving the field. */
-@keyframes fly-in-sent {
+@keyframes slide-back {
 	from {
 		opacity: 0;
-		transform: translateY(28px) scale(0.92);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0) scale(1);
-	}
-}
-
-/* Received bubbles grow from their tail corner. */
-@keyframes bubble-in {
-	from {
-		opacity: 0;
-		transform: translateY(10px) scale(0.94);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0) scale(1);
-	}
-}
-
-.bubble-in {
-	transform-origin: bottom left;
-	animation: bubble-in 260ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
-}
-
-.fly-sent {
-	transform-origin: bottom right;
-	animation: fly-in-sent 320ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
-}
-
-/* The cover lands a beat late so the tray has gone before the bubble rises where it was. Mirrored by COVER_LAND_MS. */
-.grow-in.sent-late,
-.sent-late .fly-sent {
-	animation-delay: 220ms;
-}
-
-/*
- * The composer is one persistent bar. Only its contents change between steps: the field fades in
- * place, and the rows above it (suggestions, toolbar, edit header) unfold rather than mount.
- */
-@keyframes field-in {
-	from {
-		opacity: 0;
-		transform: translateY(4px);
+		transform: translateY(-48px);
 	}
 	to {
 		opacity: 1;
@@ -161,164 +121,12 @@ textarea {
 	}
 }
 
-.field-swap {
-	animation: field-in 220ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
+.slide-forward {
+	animation: slide-forward 420ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
-.unfold {
-	display: grid;
-	grid-template-rows: 0fr;
-	opacity: 0;
-	transition:
-		grid-template-rows 260ms cubic-bezier(0.215, 0.61, 0.355, 1),
-		opacity 180ms ease-out;
-}
-
-.unfold.is-open {
-	grid-template-rows: 1fr;
-	opacity: 1;
-	transition:
-		grid-template-rows 260ms cubic-bezier(0.215, 0.61, 0.355, 1),
-		opacity 200ms ease-out 60ms;
-}
-
-.unfold > * {
-	min-height: 0;
-	overflow: hidden;
-}
-
-/* The second bubble in a received run lands a beat after the first, so they read as two messages. */
-.thread-group > .bubble-in + .bubble-in {
-	animation-delay: 160ms;
-}
-
-/*
- * Photo tray. Anchored to the top edge of the composer and clipped there, so it rises from behind
- * the composer over the thread and drops back down without moving anything in the thread. The
- * duration is mirrored by TRAY_CLOSE_MS in CoverPhotoField.
- */
-.cover-tray-dock {
-	position: absolute;
-	inset-inline: 0;
-	bottom: 100%;
-	overflow: hidden;
-	pointer-events: none;
-	padding-top: 0.75rem;
-	padding-bottom: 0.75rem;
-}
-
-.cover-tray {
-	transform: translateY(calc(100% + 0.75rem));
-	opacity: 0;
-	visibility: hidden;
-	pointer-events: none;
-	will-change: transform, opacity;
-	transition:
-		transform 320ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
-		opacity 180ms ease-in 140ms,
-		visibility 0s linear 320ms;
-}
-
-.cover-tray.is-raised {
-	transform: translateY(0);
-	opacity: 1;
-	visibility: visible;
-	pointer-events: auto;
-	transition:
-		transform 360ms cubic-bezier(0.215, 0.61, 0.355, 1),
-		opacity 200ms ease-out,
-		visibility 0s;
-}
-
-/*
- * Sending: instead of lowering, the tray shrinks toward the corner the bubble rises from and is
- * gone before the bubble appears. Mirrored by TRAY_SENT_MS in CoverPhotoField.
- */
-.cover-tray.is-sent {
-	transform-origin: bottom right;
-	transform: translateY(12px) scale(0.92);
-	opacity: 0;
-	transition:
-		transform 200ms cubic-bezier(0.55, 0.055, 0.675, 0.19),
-		opacity 120ms ease-in,
-		visibility 0s linear 200ms;
-}
-
-/* `.grow-in` plays once on mount: content grows from 0 so everything above slides up instead of jumping. */
-@keyframes grow-rows {
-	from {
-		grid-template-rows: 0fr;
-	}
-	to {
-		grid-template-rows: 1fr;
-	}
-}
-
-/* Clip only while growing; afterwards focus rings and shadows may overflow again. */
-@keyframes unclip {
-	from {
-		overflow: hidden;
-	}
-	to {
-		overflow: visible;
-	}
-}
-
-.grow-in {
-	display: grid;
-	animation:
-		grow-rows 280ms cubic-bezier(0.215, 0.61, 0.355, 1) both,
-		unclip 0s linear 280ms both;
-}
-
-.grow-in > * {
-	min-height: 0;
-}
-
-/* The question shrinks into the thread once it has been answered. */
-.question-text,
-.question-sub {
-	transition:
-		font-size 320ms cubic-bezier(0.215, 0.61, 0.355, 1),
-		line-height 320ms cubic-bezier(0.215, 0.61, 0.355, 1);
-}
-
-/* The last bubble in a received run carries the tail. */
-.thread-group > :last-child {
-	border-bottom-left-radius: 0.5rem;
-}
-
-@keyframes typing-dot {
-	0%,
-	60%,
-	100% {
-		opacity: 0.35;
-		transform: translateY(0);
-	}
-	30% {
-		opacity: 1;
-		transform: translateY(-3px);
-	}
-}
-
-.typing-dot {
-	width: 7px;
-	height: 7px;
-	border-radius: 50%;
-	background: var(--color-mute);
-	animation: typing-dot 1.1s ease-in-out infinite;
-}
-
-.typing-dot:nth-child(2) {
-	animation-delay: 150ms;
-}
-
-.typing-dot:nth-child(3) {
-	animation-delay: 300ms;
-}
-
-.compose-bar textarea {
-	scrollbar-width: thin;
+.slide-back {
+	animation: slide-back 420ms cubic-bezier(0.215, 0.61, 0.355, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
