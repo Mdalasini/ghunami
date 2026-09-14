@@ -244,7 +244,7 @@ export function CoverPhotoField({
 
 		setProcessing(true);
 		try {
-			const { file } = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
+			const file = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
 			setCover(file, originalRef.current ? {
 				original: originalRef.current,
 				crop: cropPercent
