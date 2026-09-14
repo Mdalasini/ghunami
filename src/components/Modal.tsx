@@ -49,7 +49,7 @@ export function Modal({
 		}
 
 		function onBackdrop(event: MouseEvent) {
-			if (!armedRef.current) return;
+			if (!armedRef.current || !dialog) return;
 			const box = dialog.getBoundingClientRect();
 			const outside =
 				event.clientX < box.left ||
