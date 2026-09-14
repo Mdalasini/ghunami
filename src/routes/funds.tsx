@@ -67,7 +67,7 @@ export default function MyFunds() {
 											<Link to={href} className="flex min-w-0 flex-1 gap-4 p-4">
 												{fund.hasCover ? (
 													<CoverImage
-														src={coverMediaUrl(fund.fundID)}
+														src={coverMediaUrl(fund.fundID, 'cover', fund.updatedAt)}
 														alt=""
 														className="h-20 w-24 shrink-0 rounded-2xl"
 													/>

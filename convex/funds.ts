@@ -37,7 +37,8 @@ const listItem = v.object({
 	goal: v.number(),
 	status: fundStatus,
 	hasCover: v.boolean(),
-	createdAt: v.number()
+	createdAt: v.number(),
+	updatedAt: v.number()
 });
 
 const publicReturn = v.object({
@@ -417,7 +418,8 @@ export const listMine = query({
 				goal: fund.goal,
 				status: fund.status,
 				hasCover: fund.coverStorageId !== undefined,
-				createdAt: fund.createdAt
+				createdAt: fund.createdAt,
+				updatedAt: fund.updatedAt
 			})),
 			isDone: result.isDone,
 			continueCursor: result.continueCursor

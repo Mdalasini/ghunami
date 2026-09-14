@@ -186,7 +186,7 @@ export default function FundPreview() {
 									</div>
 									<FundCover
 										title={fund.title}
-										coverUrl={fund.hasCover ? coverMediaUrl(fund.fundID) : ''}
+										coverUrl={fund.hasCover ? coverMediaUrl(fund.fundID, 'cover', fund.updatedAt) : ''}
 										organiser={fund.organiserName || 'You'}
 										emptyTitle="A place for your cover photo"
 										emptyHint="Give your story a face. You can add this later."

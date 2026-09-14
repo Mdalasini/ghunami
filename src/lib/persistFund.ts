@@ -10,6 +10,7 @@ export type PreviewFundDraft = {
 	coverSkipped: boolean;
 	hasCover: boolean;
 	hasOriginal: boolean;
+	updatedAt?: number;
 	coverCrop?: { x: number; y: number; width: number; height: number };
 	coverName?: string;
 };
@@ -29,13 +30,13 @@ export async function draftFromPreview(
 		title: saved.title,
 		story: saved.story,
 		coverSkipped: saved.coverSkipped,
-		coverUrl: saved.hasCover ? coverMediaUrl(saved.fundID) : '',
+		coverUrl: saved.hasCover ? coverMediaUrl(saved.fundID, 'cover', saved.updatedAt) : '',
 		coverName: saved.coverName ?? '',
 		coverEdit: undefined
 	};
 	if (opts.original && saved.hasOriginal && saved.coverCrop) {
 		try {
-			const response = await fetch(coverMediaUrl(saved.fundID, 'original'));
+			const response = await fetch(coverMediaUrl(saved.fundID, 'original', saved.updatedAt));
 			if (response.ok) {
 				const blob = await response.blob();
 				next.coverEdit = {

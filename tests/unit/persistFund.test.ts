@@ -51,7 +51,7 @@ describe('persistDraft', () => {
 		vi.stubGlobal(
 			'fetch',
 			vi.fn(async (url: string | URL | Request) => {
-				expect(String(url)).toBe('/media/Ab3?kind=original');
+				expect(String(url)).toBe('/media/Ab3?kind=original&v=9');
 				return new Response(new Blob([new Uint8Array(4)], { type: 'image/jpeg' }));
 			})
 		);
@@ -66,7 +66,8 @@ describe('persistDraft', () => {
 					hasCover: true,
 					hasOriginal: true,
 					coverCrop: { x: 0, y: 0, width: 80, height: 80 },
-					coverName: 'cover.jpg'
+					coverName: 'cover.jpg',
+					updatedAt: 9
 				},
 				{ original: true }
 			);
@@ -74,7 +75,7 @@ describe('persistDraft', () => {
 				fundID: 'Ab3',
 				goal: 50_000,
 				title: 'Help Maya get home',
-				coverUrl: '/media/Ab3',
+				coverUrl: '/media/Ab3?v=9',
 				coverName: 'cover.jpg',
 				coverEdit: { crop: { x: 0, y: 0, width: 80, height: 80 } }
 			});

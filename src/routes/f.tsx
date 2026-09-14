@@ -15,6 +15,7 @@ type PublicFund = {
 	story: string;
 	hasCover: boolean;
 	organiserName: string;
+	updatedAt: number;
 };
 
 type LoaderData = { fund: PublicFund | null; origin: string };
@@ -79,7 +80,7 @@ export default function PublicFundPage() {
 	if (!fund) return <Missing />;
 
 	const organiser = fund.organiserName;
-	const coverUrl = fund.hasCover ? coverMediaUrl(fund.fundID) : '';
+	const coverUrl = fund.hasCover ? coverMediaUrl(fund.fundID, 'cover', fund.updatedAt) : '';
 	const shareUrl = `${origin}${fundPath(fund.fundID, fund.title)}`;
 
 	return (
