@@ -28,6 +28,26 @@ async function answerGoal(page: Page, amount = /^Ksh\s*50,000$/) {
 	await expect(page.getByRole('heading', { name: 'Cover image' })).toBeVisible();
 }
 
+async function continueToReview(page: Page) {
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	const review = page.getByRole('link', { name: 'Continue to review' });
+	await expect(review).toHaveAttribute('href', '/create?step=5');
+	await review.click();
+	await expect(page).toHaveURL(/\/create\?step=5$/);
+	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
+}
+
+async function previewWithoutCover(page: Page) {
+	await answerGoal(page);
+	await page.getByRole('button', { name: 'Skip for now' }).click();
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
+	await page.getByRole('button', { name: 'OK' }).click();
+	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
+	await page.getByRole('button', { name: 'Preview fund' }).click();
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	await expect(page.getByRole('heading', { name: 'Help Maya get home', exact: true })).toBeVisible();
+}
+
 test('completes the local draft and can change an answer from the review', async ({ page }) => {
 	await answerGoal(page, /100,000/);
 	await expect(page.getByText('Step 2 of 5')).toBeVisible();
@@ -53,7 +73,8 @@ test('completes the local draft and can change an answer from the review', async
 	await expect(page.getByRole('heading', { name: 'Fundraiser story' })).toBeVisible();
 	await expect(page.getByText('to make a line break')).toBeVisible();
 	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
-	await page.getByRole('button', { name: 'OK' }).click();
+	await page.getByRole('button', { name: 'Preview fund' }).click();
+	await continueToReview(page);
 
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	const titleAnswer = page.getByRole('button', { name: 'Change your answer to step 3' });
@@ -94,6 +115,68 @@ test('completes the local draft and can change an answer from the review', async
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 });
 
+test('preview edits return to preview with updated answers', async ({ page }) => {
+	await previewWithoutCover(page);
+	await expect(page.getByText('A place for your cover photo')).toBeVisible();
+	await expect(page.getByRole('img', { name: /^Cover for / })).toHaveCount(0);
+
+	await page.getByRole('link', { name: 'Edit title', exact: true }).click();
+	await expect(page).toHaveURL(/\/create\?step=3&from=preview$/);
+	await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('Help Maya get home');
+	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya fly home');
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	await expect(page.getByRole('heading', { name: 'Help Maya fly home', exact: true })).toBeVisible();
+
+	await page.getByRole('link', { name: 'Edit goal', exact: true }).click();
+	await expect(page).toHaveURL(/\/create\?step=1&from=preview$/);
+	await page.getByRole('textbox', { name: 'Goal in Kenyan shillings' }).fill('75000');
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	await expect(page.getByRole('complementary', { name: 'Donation preview' })).toContainText(/75,000/);
+
+	await page.getByRole('link', { name: 'Edit story', exact: true }).click();
+	await expect(page).toHaveURL(/\/create\?step=4&from=preview$/);
+	await page.getByRole('textbox', { name: 'Story' }).fill('Help pay for Maya’s flight home.');
+	await page.getByRole('button', { name: 'Preview fund' }).click();
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	await expect(page.getByRole('region', { name: 'The story' })).toContainText('Help pay for Maya’s flight home.');
+
+	await page.getByRole('link', { name: 'Add cover', exact: true }).click();
+	await expect(page).toHaveURL(/\/create\?step=2&from=preview$/);
+	await page.locator('input[type="file"]').setInputFiles(sharpCover);
+	await page.getByRole('button', { name: 'OK' }).click();
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	await expect(page.getByRole('img', { name: 'Cover for Help Maya fly home' })).toBeVisible();
+	await expect(page.getByText('A place for your cover photo')).toHaveCount(0);
+	await page.getByRole('link', { name: 'Edit cover', exact: true }).click();
+	await expect(page).toHaveURL(/\/create\?step=2&from=preview$/);
+	await expect(page.getByRole('slider', { name: 'Zoom photo' })).toBeVisible();
+	await page.getByRole('button', { name: 'OK' }).click();
+	await continueToReview(page);
+	await expect(page.getByRole('button', { name: 'Change your answer to step 3' })).toContainText('Help Maya fly home');
+});
+
+test('an empty direct preview offers a route back to creation', async ({ page }) => {
+	await page.goto('/create/preview');
+	await expect(page.getByRole('heading', { name: 'Your fund starts with your story.' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Continue to review' })).toHaveCount(0);
+	await page.getByRole('link', { name: 'Continue creating' }).click();
+	await expect(page).toHaveURL(/\/create$/);
+	await expect(page.getByRole('heading', { name: 'Fundraising goal' })).toBeVisible();
+});
+
+test('a mobile preview with a skipped cover has no horizontal overflow', async ({ page }) => {
+	await page.setViewportSize({ width: 375, height: 812 });
+	await previewWithoutCover(page);
+	await expect(page.getByText('A place for your cover photo')).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Add cover', exact: true })).toBeVisible();
+	await expect.poll(() => page.evaluate(() =>
+		Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth
+	)).toBeLessThanOrEqual(1);
+	await continueToReview(page);
+});
+
 test('moves between questions with the arrows and keeps answers', async ({ page }) => {
 	await page.goto('/create');
 	await expect(page.getByText('Step 1 of 5')).toBeVisible();
@@ -130,7 +213,8 @@ test('can skip the cover, remove a chosen photo, and return to it later', async 
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
 	await page.getByRole('button', { name: 'OK' }).click();
 	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
-	await page.getByRole('button', { name: 'OK' }).click();
+	await page.getByRole('button', { name: 'Preview fund' }).click();
+	await continueToReview(page);
 
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	const coverAnswer = page.getByRole('button', { name: 'Change your answer to step 2' });
@@ -181,6 +265,11 @@ test('keeps simple story formatting', async ({ page }) => {
 	await expect(page.getByText(/^\d+ \/ 4000$/)).toHaveText('15 / 4000');
 
 	await page.keyboard.press('Enter');
+	await expect(page).toHaveURL(/\/create\/preview$/);
+	const previewStory = page.getByRole('region', { name: 'The story' });
+	await expect(previewStory.locator('h1')).toHaveText('Maya');
+	await expect(previewStory.locator('strong')).toHaveText('help');
+	await continueToReview(page);
 	await expect(page.getByRole('heading', { name: 'Does this look right?' })).toBeVisible();
 	const answer = page.getByRole('button', { name: 'Change your answer to step 4' });
 	await expect(answer.locator('h1')).toHaveText('Maya');
@@ -340,7 +429,8 @@ test('encodes the user-selected crop region, not just any 5:4 slice', async ({ p
 	await page.getByRole('textbox', { name: 'Title' }).fill('Help Maya get home');
 	await page.getByRole('button', { name: 'OK' }).click();
 	await page.getByRole('textbox', { name: 'Story' }).fill('Raising travel money so Maya can get home safely.');
-	await page.getByRole('button', { name: 'OK' }).click();
+	await page.getByRole('button', { name: 'Preview fund' }).click();
+	await continueToReview(page);
 
 	const cover = page.getByRole('img', { name: 'Your cover' });
 	await expect(cover).toBeVisible();

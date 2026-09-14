@@ -8,7 +8,7 @@ import {
 	useState,
 	useSyncExternalStore
 } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { CoverImage } from '../components/CoverImage';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import {
@@ -151,7 +151,14 @@ export function meta() {
 
 export default function Create() {
 	const draft = useSyncExternalStore(subscribeDraft, getDraft, getDraft);
-	const [step, setStep] = useState(1);
+	const navigate = useNavigate();
+		const [searchParams] = useSearchParams();
+		const requestedStep = Number(searchParams.get('step'));
+		const [step, setStep] = useState(() =>
+			draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
+				? requestedStep : 1
+		);
+		const [returnToPreview, setReturnToPreview] = useState(searchParams.get('from') === 'preview');
 	const [direction, setDirection] = useState<Direction>('forward');
 	const [done, setDone] = useState(false);
 	/* Set when a question was opened from the review, so the next answer returns there. */
@@ -239,6 +246,10 @@ export default function Create() {
 	}
 
 	function advance() {
+		if (returnToPreview || (step === 4 && !returnToReview)) {
+			navigate('/create/preview');
+			return;
+		}
 		if (returnToReview) {
 			setReturnToReview(false);
 			show(LAST);
@@ -273,7 +284,12 @@ export default function Create() {
 			setDone(false);
 			return;
 		}
+		if (step === LAST) {
+			navigate('/create/preview');
+			return;
+		}
 		if (step > 1) {
+			setReturnToPreview(false);
 			setReturnToReview(false);
 			show(step - 1);
 		}
@@ -297,6 +313,7 @@ export default function Create() {
 		setCoverReady(false);
 		setCoverBusy(false);
 		setDone(false);
+		setReturnToPreview(false);
 		setReturnToReview(false);
 		setDirection('forward');
 		setStep(1);
@@ -555,7 +572,7 @@ export default function Create() {
 								}`}
 								disabled={!canContinue || busy}
 							>
-								{step === LAST ? 'Looks good' : 'OK'}
+								{step === LAST ? 'Looks good' : step === 4 ? 'Preview fund' : 'OK'}
 								{step !== LAST && <Check className="h-4 w-4" />}
 							</button>
 							{step !== LAST && (
