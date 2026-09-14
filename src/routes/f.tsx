@@ -1,4 +1,5 @@
-import { data, redirect, useLoaderData, type LoaderFunctionArgs } from 'react-router';
+import { useConvexAuth, useQuery } from 'convex/react';
+import { data, Link, redirect, useLoaderData, type LoaderFunctionArgs } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { isFundID } from '../../convex/lib/fundId';
 import { SiteHeader } from '../components/BrandLink';
@@ -40,10 +41,25 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 	const url = new URL(request.url);
 	const canonical = fundPath(fund.fundID, fund.title);
 	if (!isCanonicalFundPath(url.pathname, fund.fundID, fund.title)) {
+		url.searchParams.delete('_routes');
 		return redirect(`${canonical}${url.search}`);
 	}
 
 	return { fund, origin } satisfies LoaderData;
+}
+
+function OwnerManageBar({ fundID }: { fundID: string }) {
+	const { isAuthenticated } = useConvexAuth();
+	const mine = useQuery(api.funds.getPreview, isAuthenticated ? { fundID } : 'skip');
+	if (!mine) return null;
+	return (
+		<p className="border-b border-line bg-sun/60 px-6 py-2.5 text-center text-xs font-bold text-mute">
+			You own this fund ·{' '}
+			<Link to={`/preview/${fundID}`} className="text-accent hover:underline">
+				Manage
+			</Link>
+		</p>
+	);
 }
 
 function Missing() {
@@ -69,6 +85,7 @@ export default function PublicFundPage() {
 	return (
 		<div className="flex min-h-dvh flex-col">
 			<SiteHeader />
+			<OwnerManageBar fundID={fund.fundID} />
 			<main className="slide-forward mx-auto w-full max-w-6xl flex-1 px-6 pt-8 pb-48 md:pt-12 lg:pb-20">
 				<div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-12">
 					<article className="min-w-0">

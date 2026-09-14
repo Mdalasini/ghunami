@@ -93,6 +93,24 @@ describe('public fund loader', () => {
 		expect(dataOf<{ fund: { title: string } }>(canonical).fund.title).toBe(live.title);
 	});
 
+	it('treats a React Router .data request as the document path', async () => {
+		query.mockResolvedValueOnce(live);
+		const canonical = await load('https://ghunami.test/f/Ab3/help-maya-get-home.data?_routes=routes/f', {
+			fundID: 'Ab3',
+			slug: 'help-maya-get-home'
+		});
+		expect(isResponse(canonical)).toBe(false);
+		expect(dataOf<{ fund: { title: string } }>(canonical).fund.title).toBe(live.title);
+
+		query.mockResolvedValueOnce(live);
+		const redirected = await load('https://ghunami.test/f/Ab3.data?_routes=routes/f&from=sms', {
+			fundID: 'Ab3'
+		});
+		expect(isResponse(redirected)).toBe(true);
+		if (!isResponse(redirected)) return;
+		expect(redirected.headers.get('Location')).toBe('/f/Ab3/help-maya-get-home?from=sms');
+	});
+
 	it('does not loop on Unicode titles', async () => {
 		const tokyo = { ...live, title: '東京' };
 		query.mockResolvedValueOnce(tokyo);

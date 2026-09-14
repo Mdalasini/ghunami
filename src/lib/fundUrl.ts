@@ -33,7 +33,8 @@ export function fundPath(fundID: string, title: string): string {
 }
 
 export function isCanonicalFundPath(pathname: string, fundID: string, title: string): boolean {
-	return decodePathname(pathname) === decodePathname(fundPath(fundID, title));
+	const documentPath = pathname.replace(/\.data$/, '');
+	return decodePathname(documentPath) === decodePathname(fundPath(fundID, title));
 }
 
 export function absoluteFundUrl(origin: string, fundID: string, title: string): string {

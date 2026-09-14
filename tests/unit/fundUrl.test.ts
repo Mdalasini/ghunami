@@ -29,8 +29,10 @@ describe('fund URL slugs', () => {
 		const path = fundPath('Ab3', '東京');
 		expect(path).toBe(`/f/Ab3/${encodeURIComponent('東京')}`);
 		expect(isCanonicalFundPath(path, 'Ab3', '東京')).toBe(true);
+		expect(isCanonicalFundPath(`${path}.data`, 'Ab3', '東京')).toBe(true);
 		expect(isCanonicalFundPath('/f/Ab3/東京', 'Ab3', '東京')).toBe(true);
 		expect(isCanonicalFundPath('/f/Ab3/old-title', 'Ab3', '東京')).toBe(false);
+		expect(isCanonicalFundPath('/f/Ab3/old-title.data', 'Ab3', '東京')).toBe(false);
 		expect(absoluteFundUrl('https://ghunami.test/', 'Ab3', '東京')).toBe(`https://ghunami.test${path}`);
 	});
 });
