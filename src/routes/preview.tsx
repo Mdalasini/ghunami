@@ -144,6 +144,9 @@ export default function FundPreview() {
 	const valid = isFundID(fundID);
 	const fund = useQuery(api.funds.getPreview, valid ? { fundID } : 'skip');
 	const live = fund?.status === 'live';
+	const footnote = live
+		? 'Donations coming soon.'
+		: 'Sharing opens when you set this fund live. Donations aren’t available yet.';
 
 	return (
 		<AuthGate>
@@ -210,36 +213,29 @@ export default function FundPreview() {
 								</article>
 
 								<aside className="rounded-3xl border border-line bg-card p-6 lg:sticky lg:top-8" aria-label="Donation preview">
-									<div className="-mt-2 -mr-2 flex justify-end">
-										<EditControl fund={fund} field="goal">
-											Edit goal
-										</EditControl>
-									</div>
-									<FundProgress goal={fund.goal} />
 									<div className="hidden lg:block">
-										<FundActions
-											footnote={
-												live
-													? 'Donations coming soon.'
-													: 'Sharing opens when you set this fund live. Donations aren’t available yet.'
-											}
-										/>
+										<div className="-mt-2 -mr-2 flex justify-end">
+											<EditControl fund={fund} field="goal">
+												Edit goal
+											</EditControl>
+										</div>
+										<FundProgress goal={fund.goal} />
+										<FundActions footnote={footnote} />
 									</div>
-									<FundDonations />
+									<FundDonations className="lg:mt-6 lg:border-t lg:border-line lg:pt-6" />
 								</aside>
 							</div>
 						</main>
 
 						<div className="fixed inset-x-0 bottom-0 z-10 px-3 pb-3 lg:hidden">
 							<div className="mx-auto max-w-xl rounded-3xl border border-line bg-card p-4 shadow-[0_-4px_24px_-8px_rgb(15_26_18/0.18)]">
+								<div className="-mt-2 -mr-2 flex justify-end">
+									<EditControl fund={fund} field="goal">
+										Edit goal
+									</EditControl>
+								</div>
 								<FundProgress goal={fund.goal} compact />
-								<FundActions
-									footnote={
-										live
-											? 'Donations coming soon.'
-											: 'Sharing opens when you set this fund live. Donations aren’t available yet.'
-									}
-								/>
+								<FundActions footnote={footnote} />
 							</div>
 						</div>
 					</>

@@ -100,9 +100,9 @@ export function FundActions({
 	);
 }
 
-export function FundDonations() {
+export function FundDonations({ className = 'mt-6 border-t border-line pt-6' }: { className?: string }) {
 	return (
-		<section className="mt-6 border-t border-line pt-6" aria-labelledby="donations-heading">
+		<section className={className} aria-labelledby="donations-heading">
 			<div className="flex items-center gap-2">
 				<h2 id="donations-heading" className="text-lg font-extrabold">
 					Donations
