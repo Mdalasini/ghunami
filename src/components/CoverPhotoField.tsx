@@ -157,7 +157,8 @@ export function CoverPhotoField({
 	}
 
 	async function acceptFile(file: File | undefined, savedCrop?: Area) {
-		if (!file) return;
+		/* A photo arriving mid-encode would otherwise be saved as the original of the crop being confirmed. */
+		if (!file || processing) return;
 
 		const loadId = loadIdRef.current + 1;
 		loadIdRef.current = loadId;
@@ -242,13 +243,11 @@ export function CoverPhotoField({
 			return false;
 		}
 
+		const original = originalRef.current;
 		setProcessing(true);
 		try {
 			const file = await processCoverCrop(decoded.bitmap, cropPercent, fileName);
-			setCover(file, originalRef.current ? {
-				original: originalRef.current,
-				crop: cropPercent
-			} : undefined);
+			setCover(file, original ? { original, crop: cropPercent } : undefined);
 			setError('');
 			return true;
 		} catch (caught) {
