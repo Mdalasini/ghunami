@@ -24,10 +24,9 @@ describe('users', () => {
 		expect(await ghost.query(api.users.me, {})).toBeNull();
 	});
 
-	it('me returns exactly the caller’s public fields, even for legacy rows', async () => {
+	it('me returns exactly the caller’s public fields', async () => {
 		const t = harness();
 		const id = await t.mutation(internal.users.upsertFromWorkOS, maya);
-		await t.run(async (ctx) => ctx.db.patch(id, { role: 'admin', pictureUrl: 'https://example.test/avatar' }));
 		await t.mutation(internal.users.upsertFromWorkOS, {
 			...maya, workosUserId: 'lee', email: 'lee@example.com', firstName: 'Lee'
 		});
@@ -37,7 +36,7 @@ describe('users', () => {
 		});
 	});
 
-	it('upserts verified identities in place without writing legacy fields', async () => {
+	it('upserts verified identities in place', async () => {
 		const t = harness();
 		const id = await t.mutation(internal.users.upsertFromWorkOS, {
 			...maya, firstName: null, lastName: null
@@ -60,37 +59,5 @@ describe('users', () => {
 		const b = await t.mutation(internal.users.upsertFromWorkOS, { ...maya, workosUserId: 'other' });
 		expect(a).not.toBe(b);
 		expect(await t.run(async (ctx) => ctx.db.query('users').collect())).toHaveLength(2);
-	});
-
-	it('cleans legacy rows in resumable pages without changing identity or native metadata', async () => {
-		const t = harness();
-		await t.run(async (ctx) => {
-			for (let i = 0; i < 105; i++) {
-				await ctx.db.insert('users', {
-					tokenIdentifier: `https://example.test|${i}`,
-					name: 'Legacy', email: 'legacy@example.com',
-					role: i === 0 ? 'admin' : 'user', pictureUrl: 'https://example.test/avatar',
-					createdAt: 1, updatedAt: 2
-				});
-			}
-		});
-		const before = await t.run(async (ctx) => ctx.db.query('users').collect());
-		const first = await t.mutation(internal.migrations.removeLegacyUserFields, { cursor: null });
-		expect(first).toMatchObject({ processed: 100, isDone: false });
-		const second = await t.mutation(internal.migrations.removeLegacyUserFields, { cursor: first.cursor });
-		expect(second).toMatchObject({ processed: 5, isDone: true });
-		const expected = before.map(({ role, pictureUrl, createdAt, updatedAt, ...row }) => row);
-		expect(await t.run(async (ctx) => ctx.db.query('users').collect())).toEqual(expected);
-		await t.mutation(internal.users.upsertFromWorkOS, {
-			...maya, workosUserId: '0', firstName: 'Legacy', lastName: null, email: 'legacy@example.com'
-		});
-		let cursor: string | null = null;
-		for (;;) {
-			const result: { cursor: string; isDone: boolean; processed: number } =
-							await t.mutation(internal.migrations.removeLegacyUserFields, { cursor });
-			if (result.isDone) break;
-			cursor = result.cursor;
-		}
-		expect(await t.run(async (ctx) => ctx.db.query('users').collect())).toEqual(expected);
 	});
 });

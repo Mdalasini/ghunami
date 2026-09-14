@@ -46,7 +46,6 @@ export function StoryEditor({
 	onChange,
 	onFormatsChange,
 	onKeyDown,
-	disabled,
 	placeholder,
 	ref
 }: {
@@ -54,7 +53,6 @@ export function StoryEditor({
 	onChange: (html: string) => void;
 	onFormatsChange?: (formats: StoryFormats) => void;
 	onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
-	disabled?: boolean;
 	placeholder: string;
 	ref?: Ref<StoryEditorHandle>;
 }) {
@@ -100,7 +98,7 @@ export function StoryEditor({
 
 	function run(command: string, argument?: string) {
 		const el = editor.current;
-		if (!el || disabled) return;
+		if (!el) return;
 		el.focus({ preventScroll: true });
 		document.execCommand('styleWithCSS', false, 'false');
 		document.execCommand(command, false, argument);
@@ -147,8 +145,7 @@ export function StoryEditor({
 			role="textbox"
 			aria-label="Story"
 			aria-multiline="true"
-			aria-disabled={disabled || undefined}
-			contentEditable={!disabled}
+			contentEditable
 			suppressContentEditableWarning
 			data-placeholder={placeholder}
 			onInput={emit}

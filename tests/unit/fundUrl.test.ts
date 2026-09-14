@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { absoluteFundUrl, fundPath, isCanonicalFundPath, slugifyTitle } from '../../src/lib/fundUrl';
+import { fundPath, isCanonicalFundPath, slugifyTitle } from '../../src/lib/fundUrl';
 
 describe('fund URL slugs', () => {
 	it('trims, lowercases, and strips combining diacritics', () => {
@@ -33,6 +33,5 @@ describe('fund URL slugs', () => {
 		expect(isCanonicalFundPath('/f/Ab3/東京', 'Ab3', '東京')).toBe(true);
 		expect(isCanonicalFundPath('/f/Ab3/old-title', 'Ab3', '東京')).toBe(false);
 		expect(isCanonicalFundPath('/f/Ab3/old-title.data', 'Ab3', '東京')).toBe(false);
-		expect(absoluteFundUrl('https://ghunami.test/', 'Ab3', '東京')).toBe(`https://ghunami.test${path}`);
 	});
 });

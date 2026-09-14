@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 export function Modal({
@@ -25,16 +25,16 @@ export function Modal({
 	const disabledRef = useRef(closeDisabled);
 	const onOpenRef = useRef(onOpen);
 	const armedRef = useRef(false);
-	const [armed, setArmed] = useState(false);
 	closeRef.current = onClose;
 	disabledRef.current = closeDisabled;
 	onOpenRef.current = onOpen;
-	armedRef.current = armed;
 
 	useEffect(() => {
 		const dialog = dialogRef.current;
 		if (!dialog) return;
-		const arm = window.setTimeout(() => setArmed(true), 0);
+		const arm = window.setTimeout(() => {
+			armedRef.current = true;
+		}, 0);
 		dialog.showModal();
 		onOpenRef.current?.(dialog);
 

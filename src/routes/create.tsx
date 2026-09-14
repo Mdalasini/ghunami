@@ -1,5 +1,4 @@
 import {
-	type ChangeEvent,
 	type KeyboardEvent,
 	type ReactNode,
 	useCallback,
@@ -12,43 +11,25 @@ import { Link, redirect, useNavigate, useSearchParams, type LoaderFunctionArgs }
 import { isFundID } from '../../convex/lib/fundId';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { TITLE_MAX } from '../../convex/lib/fundFields';
 import { AuthGate } from '../components/AuthGate';
 import { SiteHeader } from '../components/BrandLink';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import {
-	PLAIN_FORMATS,
-	StoryEditor,
-	type StoryEditorHandle,
-	type StoryFormats,
-	StoryToolbar
-} from '../components/StoryEditor';
-import { clearCover, formatGoal, getDraft, parseGoalText, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
+	FIELD_COPY,
+	GoalField,
+	StoryField,
+	TitleField,
+	canSaveField,
+	type FundField
+} from '../components/FundFields';
+import { PLAIN_FORMATS, type StoryEditorHandle, type StoryFormats } from '../components/StoryEditor';
+import { clearCover, getDraft, patchDraft, resetDraft, subscribeDraft } from '../lib/draft';
 import { persistDraft } from '../lib/persistFund';
 import { requireSession } from '../lib/requireSession';
-import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
 
-const STEPS = [
-	{
-		q: 'Fundraising goal',
-		sub: 'Pick a starting number for your goal. You can update this later as things change.'
-	},
-	{
-		q: 'Cover image',
-		sub: 'A clear photo of the person or place helps more than a logo. Use a clear, bright photo. If possible, pick one from a happier time.'
-	},
-	{
-		q: 'Fundraiser title',
-		sub: 'Say who it’s for and the action, like “Help Maya get home”. A good title mentions who or what it’s for, and the action.'
-	},
-	{
-		q: 'Fundraiser story',
-		sub: 'Use plain words. Explain who it’s for, and what the money does.'
-	}
-] as const;
-
+const STEPS = [FIELD_COPY.goal, FIELD_COPY.cover, FIELD_COPY.title, FIELD_COPY.story] as const;
+const FIELDS: FundField[] = ['goal', 'cover', 'title', 'story'];
 const LAST = STEPS.length;
-const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
 
 type Direction = 'forward' | 'back';
 
@@ -165,17 +146,12 @@ function CreateForm() {
 	const savingRef = useRef(false);
 
 	const current = STEPS[step - 1];
-	if (!current) {
+	const fieldName = FIELDS[step - 1];
+	if (!current || !fieldName) {
 		throw new Error('Invalid create step');
 	}
 
-	const storyChars = storyLength(draft.story);
-
-	const canContinue =
-		(step === 1 && draft.goal !== null && draft.goal > 0) ||
-		(step === 2 && coverReady) ||
-		(step === 3 && draft.title.trim().length > 0) ||
-		(step === 4 && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX);
+	const canContinue = canSaveField(fieldName, draft, coverReady);
 
 	const busy = coverBusy || saving;
 
@@ -202,18 +178,6 @@ function CreateForm() {
 	}, [step]);
 
 	const onStoryFormats = useCallback((formats: StoryFormats) => setStoryFormats(formats), []);
-
-	function parseGoal(value: string) {
-		const parsed = parseGoalText(value);
-		patchDraft({ goal: parsed.goal });
-		setGoalText(parsed.text);
-	}
-
-	function pickSuggested(amount: number) {
-		patchDraft({ goal: amount });
-		setGoalText(amount.toLocaleString('en-KE'));
-		fieldRef.current?.focus({ preventScroll: true });
-	}
 
 	function show(n: number) {
 		setDirection(n > step ? 'forward' : 'back');
@@ -298,24 +262,6 @@ function CreateForm() {
 		}
 	}
 
-	/* Plain Enter submits the form; Enter with a modifier is not an answer. */
-	function onTextKeydown(event: KeyboardEvent<HTMLInputElement>) {
-		if (event.key === 'Enter' && (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey)) {
-			event.preventDefault();
-		}
-	}
-
-	function onGoalKeydown(event: KeyboardEvent<HTMLInputElement>) {
-		onTextKeydown(event);
-		if (event.key.length === 1 && !/[0-9]/.test(event.key) && !event.metaKey && !event.ctrlKey) {
-			event.preventDefault();
-		}
-	}
-
-	function onGoalInput(event: ChangeEvent<HTMLInputElement>) {
-		parseGoal(event.currentTarget.value);
-	}
-
 	/* Enter anywhere on the question moves on, unless a control (button, link, field, slider) owns it. */
 	function onFormKeydown(event: KeyboardEvent<HTMLFormElement>) {
 		if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
@@ -328,47 +274,17 @@ function CreateForm() {
 
 	const progress = ((step - 1) / LAST) * 100;
 	const showSkip = step === 2 && !coverReady && !busy;
-	const underline =
-		'border-b-2 border-line pb-2 transition-colors duration-150 focus-within:border-accent';
 
 	function field() {
 		if (step === 1) {
 			return (
-				<>
-					<label className={`flex items-center gap-3 ${underline}`}>
-						<span className="sr-only">Goal in Kenyan shillings</span>
-						<span className="shrink-0 text-xl font-extrabold text-accent md:text-2xl" aria-hidden="true">
-							Ksh
-						</span>
-						<input
-							ref={fieldRef}
-							className="field-bare min-w-0 flex-1 text-2xl font-extrabold tracking-[-0.02em] placeholder:font-medium md:text-3xl"
-							inputMode="numeric"
-							autoComplete="off"
-							placeholder="Type your answer here..."
-							value={goalText}
-							onChange={onGoalInput}
-							onKeyDown={onGoalKeydown}
-						/>
-					</label>
-					<div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Suggested goals">
-						{SUGGESTED.map((amount) => (
-							<button
-								key={amount}
-								type="button"
-								className={`rounded-full border-2 px-4 py-2 text-sm font-bold transition-[color,background-color,border-color,transform] duration-150 active:scale-95 ${
-									draft.goal === amount
-										? 'border-accent bg-accent text-card'
-										: 'border-line bg-card text-accent hover:border-accent'
-								}`}
-								aria-pressed={draft.goal === amount}
-								onClick={() => pickSuggested(amount)}
-							>
-								{formatGoal(amount)}
-							</button>
-						))}
-					</div>
-				</>
+				<GoalField
+					goal={draft.goal}
+					goalText={goalText}
+					setGoalText={setGoalText}
+					fieldRef={fieldRef}
+					suggestedClassName="mt-5 flex flex-wrap gap-2"
+				/>
 			);
 		}
 		if (step === 2) {
@@ -383,51 +299,24 @@ function CreateForm() {
 		}
 		if (step === 3) {
 			return (
-				<>
-					<label className={`flex items-center ${underline}`}>
-						<span className="sr-only">Title</span>
-						<input
-							ref={fieldRef}
-							className="field-bare min-w-0 flex-1 text-2xl font-bold tracking-[-0.01em] placeholder:font-medium md:text-3xl"
-							maxLength={TITLE_MAX}
-							autoComplete="off"
-							placeholder="Type your answer here..."
-							value={draft.title}
-							onChange={(event) => patchDraft({ title: event.currentTarget.value })}
-							onKeyDown={onTextKeydown}
-						/>
-					</label>
-					<p className="mt-2 text-xs font-medium text-hint tabular-nums">
-						{draft.title.length} / {TITLE_MAX}
-					</p>
-				</>
+				<TitleField
+					title={draft.title}
+					fieldRef={fieldRef}
+					counterClassName="mt-2 text-xs font-medium text-hint tabular-nums"
+				/>
 			);
 		}
 		if (step === 4) {
 			return (
-				<>
-					<div className="mb-3">
-						<StoryToolbar formats={storyFormats} editor={storyRef} />
-					</div>
-					<div className={underline}>
-						<StoryEditor
-							ref={storyRef}
-							value={draft.story}
-							onChange={(story) => patchDraft({ story })}
-							onFormatsChange={onStoryFormats}
-							onKeyDown={onStoryKeydown}
-							placeholder="Type your answer here..."
-						/>
-					</div>
-					<div className="mt-2 flex items-center justify-between gap-3 text-xs font-medium text-hint">
-						<span>
-							<Key>Shift ⇧</Key> + <Key>Enter ↵</Key> to make a line break
-						</span>
-						<span className={`tabular-nums ${storyChars > STORY_MAX ? 'font-bold text-error' : ''}`}>
-							{storyChars} / {STORY_MAX}
-						</span>
-					</div>
-				</>
+				<StoryField
+					value={draft.story}
+					formats={storyFormats}
+					editor={storyRef}
+					onChange={(story) => patchDraft({ story })}
+					onFormatsChange={onStoryFormats}
+					onKeyDown={onStoryKeydown}
+					breakHint
+				/>
 			);
 		}
 		return null;
@@ -473,7 +362,7 @@ function CreateForm() {
 						void goNext();
 					}}
 				>
-					<Question n={step} q={current.q} sub={current.sub} />
+					<Question n={step} q={current.title} sub={current.sub} />
 
 					<div className="pl-0 md:pl-11">{field()}</div>
 

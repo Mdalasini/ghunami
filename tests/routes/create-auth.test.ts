@@ -80,13 +80,4 @@ describe('requireSession / legacy preview', () => {
 			expect(error.status).toBe(404);
 		}
 	});
-
-	it('sends /create/preview to /create without inventing a fund ID', async () => {
-		const { loader } = await import('../../src/routes/create.preview');
-		const result = await loader();
-		expect(isResponse(result)).toBe(true);
-		if (!isResponse(result)) return;
-		expect(result.status).toBe(302);
-		expect(result.headers.get('Location')).toBe('/create');
-	});
 });

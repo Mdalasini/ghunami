@@ -1,4 +1,6 @@
+import type { FunctionArgs } from 'convex/server';
 import type { Id } from '../../convex/_generated/dataModel';
+import { api } from '../../convex/_generated/api';
 import type { CreateDraft } from './draft';
 import { coverMediaUrl } from './media';
 
@@ -53,39 +55,15 @@ export async function draftFromPreview(
 
 type UploadKind = 'cover' | 'original';
 
-export async function persistDraft(input: {
-	draft: CreateDraft;
+type PersistFns = {
 	generateUploadUrl: () => Promise<string>;
-	registerUpload: (args: { storageId: Id<'_storage'>; kind: UploadKind }) => Promise<Id<'uploads'>>;
-	discardUpload: (args: { uploadId: Id<'uploads'> }) => Promise<null>;
-	create: (args: {
-		idempotencyKey: string;
-		goal: number;
-		title: string;
-		story: string;
-		coverSkipped: boolean;
-		coverUploadId?: Id<'uploads'>;
-		originalUploadId?: Id<'uploads'>;
-		coverCrop?: CreateDraft['coverEdit'] extends infer E
-			? E extends { crop: infer C }
-				? C
-				: never
-			: never;
-		coverName?: string;
-	}) => Promise<string>;
-	update: (args: {
-		fundID: string;
-		goal: number;
-		title: string;
-		story: string;
-		coverSkipped: boolean;
-		cover: 'keep' | 'replace' | 'clear';
-		coverUploadId?: Id<'uploads'>;
-		originalUploadId?: Id<'uploads'>;
-		coverCrop?: { x: number; y: number; width: number; height: number };
-		coverName?: string;
-	}) => Promise<string>;
-}): Promise<string> {
+	registerUpload: (args: FunctionArgs<typeof api.funds.registerUpload>) => Promise<Id<'uploads'>>;
+	discardUpload: (args: FunctionArgs<typeof api.funds.discardUpload>) => Promise<null>;
+	create?: (args: FunctionArgs<typeof api.funds.create>) => Promise<string>;
+	update: (args: FunctionArgs<typeof api.funds.update>) => Promise<string>;
+};
+
+export async function persistDraft(input: PersistFns & { draft: CreateDraft }): Promise<string> {
 	const { draft } = input;
 	if (draft.goal === null) throw new Error('Enter a goal in Kenyan shillings.');
 
@@ -95,7 +73,10 @@ export async function persistDraft(input: {
 
 	try {
 		if (localCover) {
-			const cropped = await fileFromUrl(draft.coverUrl, draft.coverName || 'cover.jpg');
+			const response = await fetch(draft.coverUrl);
+			if (!response.ok) throw new Error('That photo could not be saved. Try another one.');
+			const blob = await response.blob();
+			const cropped = new File([blob], draft.coverName || 'cover.jpg', { type: blob.type || 'image/jpeg' });
 			coverUploadId = await uploadAndRegister(input, cropped, 'cover');
 			if (draft.coverEdit) {
 				originalUploadId = await uploadAndRegister(input, draft.coverEdit.original, 'original');
@@ -118,33 +99,19 @@ export async function persistDraft(input: {
 			return await input.update({ fundID: draft.fundID, cover, ...fields });
 		}
 
+		if (!input.create) throw new Error('Fund not found');
 		return await input.create({ idempotencyKey: draft.idempotencyKey, ...fields });
 	} catch (error) {
-		await discardNewUploads(input, coverUploadId, originalUploadId);
+		await Promise.all(
+			[coverUploadId, originalUploadId]
+				.filter((id): id is Id<'uploads'> => id !== undefined)
+				.map((uploadId) => input.discardUpload({ uploadId }).catch(() => null))
+		);
 		throw error;
 	}
 }
 
-async function discardNewUploads(
-	input: { discardUpload: (args: { uploadId: Id<'uploads'> }) => Promise<null> },
-	coverUploadId: Id<'uploads'> | undefined,
-	originalUploadId: Id<'uploads'> | undefined
-) {
-	await Promise.all(
-		[coverUploadId, originalUploadId]
-			.filter((id): id is Id<'uploads'> => id !== undefined)
-			.map((uploadId) => input.discardUpload({ uploadId }).catch(() => null))
-	);
-}
-
-async function uploadAndRegister(
-	input: {
-		generateUploadUrl: () => Promise<string>;
-		registerUpload: (args: { storageId: Id<'_storage'>; kind: UploadKind }) => Promise<Id<'uploads'>>;
-	},
-	file: File,
-	kind: UploadKind
-): Promise<Id<'uploads'>> {
+async function uploadAndRegister(input: PersistFns, file: File, kind: UploadKind): Promise<Id<'uploads'>> {
 	const postUrl = await input.generateUploadUrl();
 	const response = await fetch(postUrl, {
 		method: 'POST',
@@ -155,11 +122,4 @@ async function uploadAndRegister(
 	const body = (await response.json()) as { storageId?: Id<'_storage'> };
 	if (!body.storageId) throw new Error('That photo could not be saved. Try another one.');
 	return await input.registerUpload({ storageId: body.storageId, kind });
-}
-
-async function fileFromUrl(url: string, name: string): Promise<File> {
-	const response = await fetch(url);
-	if (!response.ok) throw new Error('That photo could not be saved. Try another one.');
-	const blob = await response.blob();
-	return new File([blob], name, { type: blob.type || 'image/jpeg' });
 }

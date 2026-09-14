@@ -1,8 +1,9 @@
+import { MAX_COVER_OUTPUT_BYTES, MAX_COVER_UPLOAD_BYTES, ORIGINAL_TYPES } from '../../convex/lib/fundFields';
+
 export const COVER_ASPECT = 5 / 4;
 export const COVER_OUTPUT_WIDTH = 1350;
 export const COVER_OUTPUT_HEIGHT = 1080;
-export const MAX_COVER_UPLOAD_BYTES = 25 * 1024 * 1024;
-export const MAX_COVER_OUTPUT_BYTES = 1 * 1024 * 1024;
+export { MAX_COVER_UPLOAD_BYTES, MAX_COVER_OUTPUT_BYTES };
 export const MIN_CROP_WIDTH = 675;
 export const MIN_CROP_HEIGHT = 540;
 export const SHARP_CROP_WIDTH = 900;
@@ -21,18 +22,6 @@ export const COVER_MESSAGES = {
 	unreadable: 'We couldn’t read that photo. Try a JPG, PNG, or WebP instead.',
 	encodeFailed: 'We couldn’t prepare that photo. Try another one.'
 } as const;
-
-const ACCEPTED_TYPES = new Set([
-	'image/jpeg',
-	'image/jpg',
-	'image/pjpeg',
-	'image/png',
-	'image/webp',
-	'image/heic',
-	'image/heif',
-	'image/heic-sequence',
-	'image/heif-sequence'
-]);
 
 const ACCEPTED_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif']);
 
@@ -62,7 +51,7 @@ function extensionOf(name: string): string {
 
 export function isAcceptedCoverFile(file: File): boolean {
 	const type = file.type.toLowerCase().trim();
-	if (type && ACCEPTED_TYPES.has(type)) return true;
+	if (type && ORIGINAL_TYPES.has(type)) return true;
 	return ACCEPTED_EXTENSIONS.has(extensionOf(file.name));
 }
 
@@ -89,7 +78,7 @@ export function assessCropResolution(width: number, height: number): CropQuality
 	return 'ok';
 }
 
-export const MAX_ZOOM_CEILING = 4;
+const MAX_ZOOM_CEILING = 4;
 /*
  * The cropper reports fractional crop edges that get rounded and clamped against the bitmap, which
  * can shave a pixel off the crop. Keep the sharp threshold clear of that so zooming never causes a warning.
@@ -315,7 +304,6 @@ export function drawCoverCrop(
 	canvas.width = COVER_OUTPUT_WIDTH;
 	canvas.height = COVER_OUTPUT_HEIGHT;
 	const ctx = require2dContext(canvas);
-	ctx.clearRect(0, 0, COVER_OUTPUT_WIDTH, COVER_OUTPUT_HEIGHT);
 	ctx.drawImage(
 		bitmap,
 		region.x,

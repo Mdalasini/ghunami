@@ -101,10 +101,6 @@ export function useSessionAuth() {
 }
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-	return <SessionAuthTree>{children}</SessionAuthTree>;
-}
-
-function SessionAuthTree({ children }: { children: ReactNode }) {
 	const auth = useServerAuth();
 	const useAuth = useCallback(() => auth, [auth]);
 	return (

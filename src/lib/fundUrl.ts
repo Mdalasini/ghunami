@@ -11,10 +11,6 @@ export function slugifyTitle(title: string): string {
 	return slug || 'fund';
 }
 
-function encodeSegment(value: string): string {
-	return encodeURIComponent(value);
-}
-
 function decodePathname(pathname: string): string {
 	return pathname
 		.split('/')
@@ -29,14 +25,10 @@ function decodePathname(pathname: string): string {
 }
 
 export function fundPath(fundID: string, title: string): string {
-	return `/f/${encodeSegment(fundID)}/${encodeSegment(slugifyTitle(title))}`;
+	return `/f/${encodeURIComponent(fundID)}/${encodeURIComponent(slugifyTitle(title))}`;
 }
 
 export function isCanonicalFundPath(pathname: string, fundID: string, title: string): boolean {
 	const documentPath = pathname.replace(/\.data$/, '');
 	return decodePathname(documentPath) === decodePathname(fundPath(fundID, title));
-}
-
-export function absoluteFundUrl(origin: string, fundID: string, title: string): string {
-	return `${origin.replace(/\/$/, '')}${fundPath(fundID, title)}`;
 }
