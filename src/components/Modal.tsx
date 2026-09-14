@@ -30,7 +30,6 @@ export function Modal({
 	disabledRef.current = closeDisabled;
 	onOpenRef.current = onOpen;
 	armedRef.current = armed;
-	void closeLabel;
 
 	useEffect(() => {
 		const dialog = dialogRef.current;
@@ -73,9 +72,28 @@ export function Modal({
 		<dialog
 			ref={dialogRef}
 			aria-labelledby={titleId}
-			className={`m-auto max-h-[90dvh] w-[calc(100%-3rem)] overflow-y-auto rounded-3xl border border-line bg-card p-8 shadow-[0_16px_40px_-16px_rgb(15_26_18/0.35)] backdrop:bg-ink/40 ${className}`}
+			className={`relative m-auto max-h-[90dvh] w-[calc(100%-3rem)] overflow-y-auto rounded-3xl border border-line bg-card p-8 shadow-[0_16px_40px_-16px_rgb(15_26_18/0.35)] backdrop:bg-ink/40 ${className}`}
 		>
-			<h2 id={titleId} className="text-2xl font-extrabold tracking-[-0.03em]">
+			<button
+				type="button"
+				className="absolute top-6 right-6 inline-flex h-10 w-10 items-center justify-center rounded-full text-mute transition-colors hover:bg-sun hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+				aria-label={closeLabel}
+				disabled={closeDisabled}
+				onClick={onClose}
+			>
+				<svg
+					viewBox="0 0 16 16"
+					className="h-4 w-4"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2.4"
+					strokeLinecap="round"
+					aria-hidden="true"
+				>
+					<path d="M3 3l10 10M13 3L3 13" />
+				</svg>
+			</button>
+			<h2 id={titleId} className="pr-12 text-2xl font-extrabold tracking-[-0.03em]">
 				{title}
 			</h2>
 			{children}
