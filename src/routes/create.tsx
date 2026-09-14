@@ -328,12 +328,12 @@ export default function Create() {
 		parseGoal(event.currentTarget.value);
 	}
 
-	/* Enter anywhere on the question moves on, unless something else (a button, the slider) owns it. */
+	/* Enter anywhere on the question moves on, unless a control (button, link, field, slider) owns it. */
 	function onFormKeydown(event: KeyboardEvent<HTMLFormElement>) {
 		if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
 		if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
 		const target = event.target as HTMLElement;
-		if (target.closest('button, a, [contenteditable="true"], input:not([type="range"])')) return;
+		if (target.closest('button, a, [contenteditable="true"], input')) return;
 		event.preventDefault();
 		void goNext();
 	}
