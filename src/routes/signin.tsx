@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { redirect, useFetcher, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
+import { data, redirect, useFetcher, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { AuthShell } from '../components/AuthShell';
 import { convexServer } from '../lib/convex.server';
 import { loadServerEnv } from '../lib/env.server';
 import { safeReturnTo } from '../lib/returnTo';
-import { readSession, sessionCookie } from '../lib/session.server';
+import { clearedCookie, readSession, sessionCookie } from '../lib/session.server';
 
 function isEmail(value: string): boolean {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -35,7 +35,9 @@ export async function action({ request }: ActionFunctionArgs) {
 			const result = await convexServer().action(api.authFlow.resetPassword, {
 				token: String(form.get('token') ?? ''), password
 			});
-			return result.ok ? { reset: true } : { error: result.error };
+			return result.ok
+				? data({ reset: true }, { headers: { 'Set-Cookie': clearedCookie() } })
+				: { error: result.error };
 		}
 		if (!isEmail(email)) return { error: 'That email doesn’t look right.' };
 		if (intent === 'recover') {

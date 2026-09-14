@@ -204,14 +204,29 @@ describe('signin routes', () => {
 		expect(result).toEqual(expected);
 	});
 
-	it.each([
-		{ backend: { ok: true }, expected: { reset: true } },
-		{ backend: { ok: false, error: 'That reset link has expired.' }, expected: { error: 'That reset link has expired.' } }
-	])('reset works without email and returns $expected for $backend', async ({ backend, expected }) => {
-		action.mockResolvedValueOnce(backend);
+	it('reset success clears any existing session cookie', async () => {
+		const { readSession } = await import('../../src/lib/session.server');
+		action.mockResolvedValueOnce({ ok: true });
 		const result = await submit({ intent: 'reset', token: 'reset+token/=', password: '  NeW Password!  ' });
 		expectAction('resetPassword', { token: 'reset+token/=', password: '  NeW Password!  ' });
-		expect(result).toEqual(expected);
+		expect(result).toMatchObject({ data: { reset: true } });
+		const cookie = new Headers(
+			result && typeof result === 'object' && 'init' in result
+				? (result.init as { headers?: HeadersInit }).headers
+				: undefined
+		).get('Set-Cookie');
+		expect(cookie).toMatch(/gh_session=/);
+		expect(cookie).toMatch(/Max-Age=0/);
+		expect(readSession(new Request('https://ghunami.test/', {
+			headers: { cookie: cookie?.split(';')[0] ?? '' }
+		}))).toBeNull();
+	});
+
+	it('reset failure returns the backend error without clearing a session', async () => {
+		action.mockResolvedValueOnce({ ok: false, error: 'That reset link has expired.' });
+		const result = await submit({ intent: 'reset', token: 'reset+token/=', password: '  NeW Password!  ' });
+		expectAction('resetPassword', { token: 'reset+token/=', password: '  NeW Password!  ' });
+		expect(result).toEqual({ error: 'That reset link has expired.' });
 	});
 
 	it('reset delegates missing credentials to the backend without validating email', async () => {
