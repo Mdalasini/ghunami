@@ -2,6 +2,7 @@ import { ConvexProviderWithAuth } from 'convex/react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useFetchers, useLocation } from 'react-router';
 
+import { DraftIsolation } from './DraftIsolation';
 import { convex } from '../lib/convex';
 
 async function requestToken(force: boolean): Promise<string | null> {
@@ -91,7 +92,7 @@ function useServerAuth() {
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
 	return (
 		<ConvexProviderWithAuth client={convex} useAuth={useServerAuth}>
-
+			<DraftIsolation />
 			{children}
 		</ConvexProviderWithAuth>
 	);

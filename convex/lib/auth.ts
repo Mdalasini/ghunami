@@ -12,3 +12,9 @@ export async function getCurrentUserOrNull(
 		.withIndex('by_token', (q) => q.eq('tokenIdentifier', identity.tokenIdentifier))
 		.unique();
 }
+
+export async function requireUser(ctx: QueryCtx | MutationCtx): Promise<Doc<'users'>> {
+	const user = await getCurrentUserOrNull(ctx);
+	if (!user) throw new Error('Not authenticated');
+	return user;
+}

@@ -85,6 +85,13 @@ export function AuthBar() {
 						role="menu"
 						className="min-w-full rounded-3xl border-2 border-line bg-card p-1.5 shadow-[0_4px_0_0_var(--color-line)]"
 					>
+						<Link
+							to="/funds"
+							role="menuitem"
+							className="font-ui block w-full whitespace-nowrap rounded-full px-5 py-2.5 text-xs font-extrabold tracking-wider text-mute uppercase hover:bg-paper hover:text-ink"
+						>
+							My funds
+						</Link>
 						<signOut.Form method="post" action="/auth/signout">
 							<button
 								type="submit"

@@ -18,6 +18,8 @@ describe('draft', () => {
 	it('starts empty', async () => {
 		const { getDraft } = await loadDraft();
 		expect(getDraft()).toEqual({
+			fundID: '',
+			idempotencyKey: expect.any(String),
 			goal: null,
 			coverUrl: '',
 			coverName: '',
@@ -25,6 +27,7 @@ describe('draft', () => {
 			title: '',
 			story: ''
 		});
+		expect(getDraft().idempotencyKey.length).toBeGreaterThanOrEqual(8);
 	});
 
 	it('clears a skipped flag when a cover is set and revokes it on clearCover', async () => {

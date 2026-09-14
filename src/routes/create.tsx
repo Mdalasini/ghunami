@@ -8,7 +8,12 @@ import {
 	useState,
 	useSyncExternalStore
 } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams, type LoaderFunctionArgs } from 'react-router';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { TITLE_MAX } from '../../convex/lib/fundFields';
+import { isFundID } from '../../convex/lib/fundId';
+import { AuthGate } from '../components/AuthGate';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import {
 	PLAIN_FORMATS,
@@ -18,7 +23,10 @@ import {
 	StoryToolbar
 } from '../components/StoryEditor';
 import { HorizonDisc } from '../components/HorizonMark';
-import { clearCover, formatGoal, getDraft, patchDraft, subscribeDraft } from '../lib/draft';
+import { clearCover, formatGoal, getDraft, patchDraft, resetDraft, subscribeDraft, type CreateDraft } from '../lib/draft';
+import { coverMediaUrl } from '../lib/media';
+import { persistDraft } from '../lib/persistFund';
+import { requireSession } from '../lib/requireSession';
 import { STORY_MAX, isStoryEmpty, storyLength } from '../lib/richText';
 
 const STEPS = [
@@ -41,7 +49,6 @@ const STEPS = [
 ] as const;
 
 const LAST = STEPS.length;
-const TITLE_MAX = 80;
 const SUGGESTED = [50_000, 100_000, 250_000, 500_000];
 
 type Direction = 'forward' | 'back';
@@ -111,17 +118,41 @@ export function meta() {
 	return [{ title: 'Start a fundraiser · Ghunami' }];
 }
 
+export async function loader({ request }: LoaderFunctionArgs) {
+	requireSession(request);
+	return null;
+}
+
 export default function Create() {
+	return (
+		<AuthGate>
+			<CreateForm />
+		</AuthGate>
+	);
+}
+
+function CreateForm() {
 	const draft = useSyncExternalStore(subscribeDraft, getDraft, getDraft);
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
+	const fundIDParam = searchParams.get('fundID') ?? '';
+	const editing = isFundID(fundIDParam);
+	const saved = useQuery(api.funds.getPreview, editing ? { fundID: fundIDParam } : 'skip');
+	const generateUploadUrl = useMutation(api.funds.generateUploadUrl);
+	const registerUpload = useMutation(api.funds.registerUpload);
+	const createFund = useMutation(api.funds.create);
+	const updateFund = useMutation(api.funds.update);
+
 	const requestedStep = Number(searchParams.get('step'));
 	const [step, setStep] = useState(() =>
-		draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
+		!editing && draft.goal !== null && requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)
 			? requestedStep : 1
 	);
 	const [returnToPreview, setReturnToPreview] = useState(searchParams.get('from') === 'preview');
 	const [direction, setDirection] = useState<Direction>('forward');
+	const [saving, setSaving] = useState(false);
+	const [saveError, setSaveError] = useState('');
+	const [ready, setReady] = useState(!editing);
 
 	const [goalText, setGoalText] = useState(() =>
 		draft.goal !== null ? draft.goal.toLocaleString('en-KE') : ''
@@ -133,6 +164,8 @@ export default function Create() {
 	const fieldRef = useRef<HTMLInputElement>(null);
 	const storyRef = useRef<StoryEditorHandle>(null);
 	const okRef = useRef<HTMLButtonElement>(null);
+	const hydratedFor = useRef('');
+	const savingRef = useRef(false);
 
 	const current = STEPS[step - 1];
 	if (!current) {
@@ -147,7 +180,64 @@ export default function Create() {
 		(step === 3 && draft.title.trim().length > 0) ||
 		(step === 4 && !isStoryEmpty(draft.story) && storyChars <= STORY_MAX);
 
-	const busy = coverBusy;
+	const busy = coverBusy || saving;
+
+	useEffect(() => {
+		if (editing) return;
+		if (getDraft().fundID) resetDraft();
+	}, [editing]);
+
+	useEffect(() => {
+		if (!editing) return;
+		if (saved === undefined) return;
+		if (saved === null) {
+			setReady(true);
+			return;
+		}
+		if (hydratedFor.current === saved.fundID) {
+			setReady(true);
+			return;
+		}
+		hydratedFor.current = saved.fundID;
+		let cancelled = false;
+		void (async () => {
+			resetDraft();
+			const next = {
+				fundID: saved.fundID,
+				goal: saved.goal,
+				title: saved.title,
+				story: saved.story,
+				coverSkipped: saved.coverSkipped,
+				coverUrl: saved.hasCover ? coverMediaUrl(saved.fundID) : '',
+				coverName: saved.coverName ?? '',
+				coverEdit: undefined as CreateDraft['coverEdit']
+			};
+			if (saved.hasOriginal && saved.coverCrop) {
+				try {
+					const response = await fetch(coverMediaUrl(saved.fundID, 'original'));
+					if (response.ok) {
+						const blob = await response.blob();
+						next.coverEdit = {
+							original: new File([blob], saved.coverName || 'photo', { type: blob.type }),
+							crop: saved.coverCrop
+						};
+					}
+				} catch {
+					// Crop editor can still use the saved cover image.
+				}
+			}
+			if (cancelled) return;
+			patchDraft(next);
+			setGoalText(saved.goal.toLocaleString('en-KE'));
+			if (requestedStep >= 1 && requestedStep <= LAST && Number.isInteger(requestedStep)) {
+				setStep(requestedStep);
+			}
+			setReady(true);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [editing, saved, requestedStep]);
 
 	/* Each question arrives with the field ready to type into. */
 	useEffect(() => {
@@ -192,9 +282,32 @@ export default function Create() {
 		setStep(n);
 	}
 
+	async function saveAndPreview() {
+		if (savingRef.current) return;
+		savingRef.current = true;
+		setSaving(true);
+		setSaveError('');
+		try {
+			const fundID = await persistDraft({
+				draft: getDraft(),
+				generateUploadUrl: () => generateUploadUrl({}),
+				registerUpload: (args) => registerUpload(args),
+				create: (args) => createFund(args),
+				update: (args) => updateFund(args)
+			});
+			patchDraft({ fundID });
+			navigate(`/preview/${fundID}`);
+		} catch (error) {
+			savingRef.current = false;
+			setSaveError(error instanceof Error ? error.message : 'We couldn’t save this fund. Try again.');
+		} finally {
+			setSaving(false);
+		}
+	}
+
 	function advance() {
 		if (returnToPreview || step === LAST) {
-			navigate('/create/preview');
+			void saveAndPreview();
 			return;
 		}
 
@@ -382,6 +495,26 @@ export default function Create() {
 		return null;
 	}
 
+	if (editing && saved === null) {
+		return (
+			<div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-5 px-6">
+				<h1 className="text-3xl font-extrabold">Fund not found</h1>
+				<p className="text-mute">This draft isn’t available. It may have been removed, or it belongs to someone else.</p>
+				<Link to="/funds" className="btn-press self-start bg-accent text-card hover:bg-accent-deep">
+					My funds
+				</Link>
+			</div>
+		);
+	}
+
+	if (editing && !ready) {
+		return (
+			<div className="flex min-h-dvh flex-col items-center justify-center gap-4">
+				<p className="text-sm font-extrabold tracking-wider text-mute uppercase">Loading</p>
+			</div>
+		);
+	}
+
 	return (
 		<div className="flex min-h-dvh flex-col">
 			<div className="fixed inset-x-0 top-0 z-20 h-1.5 bg-line" role="presentation">
@@ -439,7 +572,7 @@ export default function Create() {
 							}`}
 							disabled={!canContinue || busy}
 						>
-							{step === LAST ? 'Preview fund' : 'OK'}
+							{saving ? 'Saving…' : step === LAST ? 'Preview fund' : 'OK'}
 							<Check className="h-4 w-4" />
 						</button>
 						<span className="text-xs font-medium text-hint">
@@ -455,6 +588,11 @@ export default function Create() {
 							</button>
 						)}
 					</div>
+					{saveError ? (
+						<p className="pl-0 text-sm font-medium text-error md:pl-11" role="alert">
+							{saveError}
+						</p>
+					) : null}
 				</form>
 			</main>
 
