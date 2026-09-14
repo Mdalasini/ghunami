@@ -30,14 +30,25 @@ SESSION_SECRET=ghunami-test-only-session-key-do-not-use!
 
 `65531` is an unused loopback port. A placeholder URL is not a mock by itself; tests mock or block the backend.
 
+## Password authentication
+
+The shared `/signin` form supports email/password sign-in and signup, Google OAuth, email verification when required by WorkOS, and password recovery. Email and names are retained between form views; passwords are cleared when changing methods or account mode.
+
+Before deploying:
+
+- Deploy the updated Convex functions alongside the app; the old magic-auth actions have been replaced.
+- Enable email/password and Google authentication in WorkOS, with the desired email-verification policy. Keep `WORKOS_API_KEY` and `WORKOS_CLIENT_ID` configured on Convex.
+- Set the WorkOS password-reset URL to your app’s `/signin` URL (for example, `https://your-app.example/signin`). WorkOS appends `?token=…`, which opens the new-password view. Successful resets return to sign in rather than automatically creating a session.
+- Existing magic-auth users without passwords can use **Reset password** to establish one.
+
 ## What each layer covers
 
 | Layer | Command | Checks | Mocks / isolation |
 | --- | --- | --- | --- |
 | Unit | `npm test` (node project) | Draft store, `safeReturnTo`, encrypted session cookies | No `.env.local`. `process.loadEnvFile` is stubbed. Session tests use a labeled test-only key. |
-| Convex functions | `npm test` (convex / authFlow projects) | `users.me`, `upsertFromWorkOS`, legacy user-field migration; `authFlow` send/verify/Google/refresh | `convex-test` in-memory database. **Does not** validate a deployed Convex or WorkOS integration. `authFlow` tests mock `@workos-inc/node` and use labeled test-only env vars; they never construct a network WorkOS client. |
+| Convex functions | `npm test` (convex / authFlow projects) | `users.me`, `upsertFromWorkOS`, legacy user-field migration; `authFlow` password/signup/verification/reset/Google/refresh | `convex-test` in-memory database. **Does not** validate a deployed Convex or WorkOS integration. `authFlow` tests mock `@workos-inc/node` and use labeled test-only env vars; they never construct a network WorkOS client. |
 | Server routes | `npm test` (node project) | Sign-in, token refresh, sign-out, Google/callback | `convexServer()` and `loadServerEnv()` mocked. Real cookie sealing is used in a subset of tests. JWT payloads are local expiry fixtures, not signature proofs. |
-| Browser | `npm run test:e2e` | Signed-out home, local create-draft flow, client-side sign-in validation | Production build + `npm run start`. Does not reuse an existing server. Browser requests off the app origin (including WebSockets) are blocked. `/auth/token` returns a signed-out fixture. Node SSR is not intercepted by page routes; those journeys avoid loaders that call Convex. |
+| Browser | `npm run test:e2e` | Signed-out home, local create-draft flow, sign-in validation, retained form state, password/recovery views, reduced motion | Production build + `npm run start`. Does not reuse an existing server. Browser requests off the app origin (including WebSockets) are blocked. `/auth/token` returns a signed-out fixture. Node SSR is not intercepted by page routes; those journeys avoid loaders that call Convex. |
 
 `/create` is not auth-gated in the current app.
 
@@ -45,7 +56,7 @@ SESSION_SECRET=ghunami-test-only-session-key-do-not-use!
 
 - Tests must not read developer `.env.local`. Vitest sets `envDir: false` and `GHUNAMI_ISOLATED_TEST=1`. The app skips `loadEnvFile` and Vite env files when that flag is set. Do not delete or rewrite `.env.local`.
 - Builds still need a syntactically valid `VITE_CONVEX_URL` because the client module checks it at import time.
-- Real WorkOS login, email codes, OAuth, and hosted Convex remain outside this suite.
+- Real WorkOS password login, verification/reset email delivery, OAuth, and hosted Convex remain outside this suite.
 - The in-memory draft does not survive a reload. Review does not publish a campaign.
 
 ## Adding an isolated fixture or scenario

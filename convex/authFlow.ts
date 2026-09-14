@@ -1,7 +1,7 @@
 'use node';
 
 import { v } from 'convex/values';
-import { WorkOS, type AuthenticationResponse } from '@workos-inc/node';
+import { WorkOS, AuthenticationException, type AuthenticationResponse } from '@workos-inc/node';
 import { internal } from './_generated/api';
 import { action } from './_generated/server';
 import type { ActionCtx } from './_generated/server';
@@ -39,9 +39,9 @@ function toSession(result: AuthenticationResponse) {
 }
 
 /**
- * Records the verified identity. This is the only moment we hold an email WorkOS
- * has actually confirmed, so it is where the `users` row gets its email — the
- * access token has no `email` claim to fall back on.
+ * Records the authenticated WorkOS identity rather than caller-supplied details.
+ * Email verification is enforced by the WorkOS environment's auth policy.
+ * The access token has no `email` claim to fall back on.
  */
 async function record(
 	ctx: ActionCtx,
@@ -57,74 +57,131 @@ async function record(
 	});
 }
 
-/**
- * WorkOS error text names the address back at the caller and reads like an API,
- * so it stays in the logs and the user gets our copy instead.
- */
-function message(error: unknown, fallback: string): string {
-	console.error('workos', error);
-	return fallback;
+const authenticationResult = v.object({
+	session: v.union(session, v.null()),
+	error: v.union(v.string(), v.null()),
+	pendingAuthenticationToken: v.union(v.string(), v.null())
+});
+const operationResult = v.object({ ok: v.boolean(), error: v.union(v.string(), v.null()) });
+
+function authenticationFailure(error: string) {
+	return { session: null, error, pendingAuthenticationToken: null };
 }
 
-/**
- * Mails a six-digit code. When `firstName` is present the email belongs to
- * nobody yet, so the account is created first. An already-taken email is not an
- * error here — we fall through to the code, which logs the existing user in.
- */
-export const sendCode = action({
+// Never log SDK exceptions: their raw data can contain credentials and tokens.
+function authenticationError(error: unknown, fallback: string) {
+	if (
+		error instanceof AuthenticationException &&
+		error.code === 'email_verification_required' &&
+		typeof error.pendingAuthenticationToken === 'string' &&
+		error.pendingAuthenticationToken.trim()
+	) {
+		return { session: null, error: null, pendingAuthenticationToken: error.pendingAuthenticationToken };
+	}
+	return authenticationFailure(fallback);
+}
+
+function validEmail(email: string): boolean {
+	return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function validName(name: string | undefined): boolean {
+	return !!name && name.length <= 100 && !/[\u0000-\u001f\u007f]/.test(name);
+}
+
+/** Creates password accounts only on explicit signup, then authenticates them. */
+export const authenticatePassword = action({
 	args: {
 		email: v.string(),
+		password: v.string(),
 		firstName: v.optional(v.string()),
-		lastName: v.optional(v.string())
+		lastName: v.optional(v.string()),
+		signUp: v.boolean()
 	},
-	returns: v.object({ ok: v.boolean(), error: v.union(v.string(), v.null()) }),
-	handler: async (_ctx, args) => {
-		const { workos } = client();
+	returns: authenticationResult,
+	handler: async (ctx, args) => {
 		const email = args.email.trim().toLowerCase();
-
-		if (args.firstName) {
-			try {
-				await workos.userManagement.createUser({
-					email,
-					firstName: args.firstName.trim(),
-					lastName: args.lastName?.trim() || undefined
-				});
-			} catch {
-				// Already registered. The code below still authenticates them.
-			}
+		const firstName = args.firstName?.trim();
+		const lastName = args.lastName?.trim();
+		if (!validEmail(email)) return authenticationFailure('Enter a valid email address.');
+		if (!args.password.trim()) return authenticationFailure('Enter your password.');
+		if (args.signUp && (!validName(firstName) || !validName(lastName))) {
+			return authenticationFailure('Enter your first and last name (1–100 characters each).');
 		}
 
 		try {
-			await workos.userManagement.createMagicAuth({ email });
-			return { ok: true, error: null };
+			const { workos, clientId } = client();
+			if (args.signUp) {
+				try {
+					await workos.userManagement.createUser({ email, password: args.password, firstName, lastName });
+				} catch {
+					// A duplicate or failed signup must never fall through to sign-in.
+					return authenticationFailure('We couldn’t create your account. Try signing in, or use a different password.');
+				}
+			}
+			const result = await workos.userManagement.authenticateWithPassword({
+				clientId, email, password: args.password
+			});
+			await record(ctx, clientId, result.user);
+			return { session: toSession(result), error: null, pendingAuthenticationToken: null };
 		} catch (error) {
-			return { ok: false, error: message(error, 'We couldn’t send that code. Try again.') };
+			return authenticationError(error, 'Sign-in failed. Check your email and password, then try again.');
 		}
 	}
 });
 
-/** Trades the emailed code for a WorkOS session. */
-export const verifyCode = action({
-	args: { email: v.string(), code: v.string() },
-	returns: v.object({
-		session: v.union(session, v.null()),
-		error: v.union(v.string(), v.null())
-	}),
+/** Completes the email verification challenge from password authentication. */
+export const verifyEmail = action({
+	args: { code: v.string(), pendingAuthenticationToken: v.string() },
+	returns: authenticationResult,
 	handler: async (ctx, args) => {
-		const { workos, clientId } = client();
+		const code = args.code.trim();
+		if (!code || !args.pendingAuthenticationToken.trim()) {
+			return authenticationFailure('Enter the verification code and try again.');
+		}
 		try {
-			const result = await workos.userManagement.authenticateWithMagicAuth({
-				clientId,
-				email: args.email.trim().toLowerCase(),
-				code: args.code.trim()
+			const { workos, clientId } = client();
+			const result = await workos.userManagement.authenticateWithEmailVerification({
+				clientId, code, pendingAuthenticationToken: args.pendingAuthenticationToken
 			});
 			await record(ctx, clientId, result.user);
-			return { session: toSession(result), error: null };
+			return { session: toSession(result), error: null, pendingAuthenticationToken: null };
 		} catch (error) {
-			return {
-				session: null,
-				error: message(error, 'That code didn’t work. Check it, or send a new one.')
-			};
+			return authenticationError(error, 'That code didn’t work. Check it, or sign in again.');
+		}
+	}
+});
+
+/** WorkOS sends the reset email using the reset URL configured in its dashboard. */
+export const requestPasswordReset = action({
+	args: { email: v.string() },
+	returns: operationResult,
+	handler: async (_ctx, args) => {
+		const email = args.email.trim().toLowerCase();
+		if (!validEmail(email)) return { ok: false, error: 'Enter a valid email address.' };
+		try {
+			const { workos } = client();
+			await workos.userManagement.createPasswordReset({ email });
+			return { ok: true, error: null };
+		} catch {
+			return { ok: false, error: 'We couldn’t request a password reset. Try again.' };
+		}
+	}
+});
+
+/** A reset does not install a session; the caller must sign in afterward. */
+export const resetPassword = action({
+	args: { token: v.string(), password: v.string() },
+	returns: operationResult,
+	handler: async (_ctx, args) => {
+		if (!args.token.trim()) return { ok: false, error: 'Open a valid password reset link.' };
+		if (!args.password.trim()) return { ok: false, error: 'Enter your new password.' };
+		try {
+			const { workos } = client();
+			await workos.userManagement.resetPassword({ token: args.token, newPassword: args.password });
+			return { ok: true, error: null };
+		} catch {
+			return { ok: false, error: 'We couldn’t reset your password. Try a different password or request a new link.' };
 		}
 	}
 });
@@ -164,8 +221,8 @@ export const exchangeCode = action({
 			});
 			await record(ctx, clientId, result.user);
 			return { session: toSession(result), error: null };
-		} catch (error) {
-			return { session: null, error: message(error, 'Sign-in failed. Try again.') };
+		} catch {
+			return { session: null, error: 'Sign-in failed. Try again.' };
 		}
 	}
 });

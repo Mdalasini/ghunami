@@ -1,38 +1,27 @@
-
-import { useEffect, useRef, useState } from 'react';
-import {
-	redirect,
-	useFetcher,
-	useLoaderData,
-	type ActionFunctionArgs,
-	type LoaderFunctionArgs
-} from 'react-router';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { data, redirect, useFetcher, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { AuthShell } from '../components/AuthShell';
 import { convexServer } from '../lib/convex.server';
 import { loadServerEnv } from '../lib/env.server';
 import { safeReturnTo } from '../lib/returnTo';
-import { readSession, sessionCookie } from '../lib/session.server';
+import { clearedCookie, readSession, sessionCookie } from '../lib/session.server';
 
-const CODE_LENGTH = 6;
-
-
-/** Deliberately loose — WorkOS is the real authority on deliverability. */
 function isEmail(value: string): boolean {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 export function meta() {
-	return [{ title: 'Log in · Ghunami' }];
+	return [{ title: 'Sign in · Ghunami' }];
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
 	loadServerEnv();
-	const returnTo = safeReturnTo(new URL(request.url).searchParams.get('returnTo'));
-	if (readSession(request)) {
-		return redirect(returnTo);
-	}
-	return { returnTo };
+	const url = new URL(request.url);
+	const returnTo = safeReturnTo(url.searchParams.get('returnTo'));
+	const resetToken = url.searchParams.get('token');
+	if (readSession(request) && !resetToken) return redirect(returnTo);
+	return { returnTo, resetToken };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -40,214 +29,210 @@ export async function action({ request }: ActionFunctionArgs) {
 	const form = await request.formData();
 	const intent = String(form.get('intent'));
 	const email = String(form.get('email') ?? '').trim().toLowerCase();
-
-	if (!isEmail(email)) {
-		return { error: 'That email doesn’t look right.' };
-	}
-
-	if (intent === 'send') {
-		const firstName = String(form.get('firstName') ?? '').trim();
-		const lastName = String(form.get('lastName') ?? '').trim();
-		const result = await convexServer().action(api.authFlow.sendCode, {
-			email,
-			...(firstName ? { firstName, lastName } : {})
-		});
-		return result.ok ? { sent: true } : { error: result.error };
-	}
-
-	if (intent === 'verify') {
-		const code = String(form.get('code') ?? '').trim();
-		const result = await convexServer().action(api.authFlow.verifyCode, { email, code });
-		if (!result.session) {
-			return { error: result.error };
+	const password = String(form.get('password') ?? '');
+	try {
+		if (intent === 'reset') {
+			const result = await convexServer().action(api.authFlow.resetPassword, {
+				token: String(form.get('token') ?? ''), password
+			});
+			return result.ok
+				? data({ reset: true }, { headers: { 'Set-Cookie': clearedCookie() } })
+				: { error: result.error };
 		}
-		return redirect(safeReturnTo(String(form.get('returnTo') ?? '/')), {
-			headers: { 'Set-Cookie': sessionCookie(result.session) }
-		});
+		if (!isEmail(email)) return { error: 'That email doesn’t look right.' };
+		if (intent === 'recover') {
+			const result = await convexServer().action(api.authFlow.requestPasswordReset, { email });
+			return result.ok ? { recoverySent: true } : { error: result.error };
+		}
+		if (intent !== 'signin' && intent !== 'signup' && intent !== 'verify') {
+			return { error: 'Something went wrong. Try again.' };
+		}
+		if (intent !== 'verify' && !password) return { error: 'Please enter your password.' };
+		const result = intent === 'verify'
+			? await convexServer().action(api.authFlow.verifyEmail, {
+				code: String(form.get('code') ?? ''),
+				pendingAuthenticationToken: String(form.get('pendingAuthenticationToken') ?? '')
+			})
+			: await convexServer().action(api.authFlow.authenticatePassword, {
+				email, password, signUp: intent === 'signup',
+				...(intent === 'signup' ? {
+					firstName: String(form.get('firstName') ?? '').trim(),
+					lastName: String(form.get('lastName') ?? '').trim()
+				} : {})
+			});
+		if (result.session) {
+			return redirect(safeReturnTo(String(form.get('returnTo') ?? '/')), {
+				headers: { 'Set-Cookie': sessionCookie(result.session) }
+			});
+		}
+		if (result.pendingAuthenticationToken) return { pendingAuthenticationToken: result.pendingAuthenticationToken };
+		return { error: result.error };
+	} catch {
+		return { error: 'We couldn’t connect. Please try again.' };
 	}
-
-	return { error: 'Something went wrong. Try again.' };
 }
 
-
-function Field({
-	label,
-	...props
-}: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
 	return (
-		<label className="block rounded-3xl border-2 border-line bg-card px-5 py-3 transition-colors focus-within:border-accent">
+		<label className="block min-w-0 rounded-3xl border-2 border-line bg-card px-5 py-3 transition-colors focus-within:border-accent">
 			<span className="text-xs font-extrabold tracking-wider text-mute uppercase">{label}</span>
 			<input className="field-bare mt-1 text-base text-ink" {...props} />
 		</label>
 	);
 }
 
-export default function SignIn() {
-	const { returnTo } = useLoaderData<typeof loader>();
-	const fetcher = useFetcher<typeof action>();
+// Keep sections mounted so layout and opacity can transition in both directions.
+function Section({ open, children }: { open: boolean; children: ReactNode }) {
+	return (
+		<div className="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out motion-reduce:transition-none"
+			style={{ gridTemplateRows: open ? '1fr' : '0fr', opacity: open ? 1 : 0 }}
+			inert={!open} aria-hidden={!open}>
+			<div className="min-h-0 overflow-hidden"><div className="flex flex-col gap-3 pb-4">{children}</div></div>
+		</div>
+	);
+}
 
+type Phase = 'email' | 'password' | 'verify' | 'recover' | 'reset';
+
+export default function SignIn() {
+	const { returnTo, resetToken } = useLoaderData<typeof loader>();
+	const fetcher = useFetcher<typeof action>();
 	const [email, setEmail] = useState('');
 	const [isNew, setIsNew] = useState(false);
 	const [firstName, setFirstName] = useState('');
 	const [lastName, setLastName] = useState('');
-	const [phase, setPhase] = useState<'email' | 'code'>('email');
-	const [digits, setDigits] = useState<string[]>(() => Array(CODE_LENGTH).fill(''));
-	const boxes = useRef<Array<HTMLInputElement | null>>([]);
-
-	const valid = isEmail(email);
-
-
+	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
+	const [phase, setPhase] = useState<Phase>(resetToken ? 'reset' : 'email');
+	const [code, setCode] = useState('');
+	const [pendingToken, setPendingToken] = useState('');
+	const [error, setError] = useState<string | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	const formRef = useRef<HTMLFormElement>(null);
 	const busy = fetcher.state !== 'idle';
-	const error = fetcher.data && 'error' in fetcher.data ? fetcher.data.error : null;
+	const enteringPassword = phase === 'password' || phase === 'reset';
 
 	useEffect(() => {
-		if (fetcher.data && 'sent' in fetcher.data && fetcher.data.sent) {
-			setPhase('code');
+		const data = fetcher.data;
+		if (!data) return;
+		setError('error' in data ? data.error ?? null : null);
+		if ('pendingAuthenticationToken' in data && data.pendingAuthenticationToken) {
+			setPendingToken(data.pendingAuthenticationToken);
+			setPassword('');
+			setPhase('verify');
 		}
-	}, [fetcher.data]);
+		if ('recoverySent' in data) setNotice('If an account exists for this email, you’ll receive a link to reset your password.');
+		if ('reset' in data) {
+			setPassword('');
+			setPhase('email');
+			setIsNew(false);
+			setNotice('Your password has been reset. Sign in with your new password.');
+			// Remove the one-use credential from the address bar after success.
+			window.history.replaceState(window.history.state, '', `/signin?returnTo=${encodeURIComponent(returnTo)}`);
+		}
+	}, [fetcher.data, returnTo]);
 
 	useEffect(() => {
-		if (phase === 'code') {
-			boxes.current[0]?.focus();
-		}
-	}, [phase]);
+		const name = enteringPassword ? 'password' : phase === 'verify' ? 'code' : 'email';
+		formRef.current?.querySelector<HTMLInputElement>(`input[name="${name}"]`)?.focus({ preventScroll: true });
+	}, [phase, enteringPassword]);
 
-	// A rejected code should be retypable straight away, not deleted by hand.
-	useEffect(() => {
-		if (phase === 'code' && error) {
-			setDigits(Array(CODE_LENGTH).fill(''));
-			boxes.current[0]?.focus();
-		}
-	}, [phase, error]);
-
-	function send() {
-		fetcher.submit(
-			{ intent: 'send', email, ...(isNew ? { firstName, lastName } : {}) },
-			{ method: 'post' }
-		);
+	function changePhase(next: Phase) {
+		setError(null);
+		setNotice(null);
+		setPassword('');
+		setShowPassword(false);
+		setCode('');
+		setPendingToken('');
+		setPhase(next);
 	}
 
-	function verify(value: string) {
-		fetcher.submit({ intent: 'verify', email, code: value, returnTo }, { method: 'post' });
-	}
-
-	function setDigit(index: number, raw: string) {
-		const clean = raw.replace(/\D/g, '');
-		if (!clean) {
-			setDigits((prev) => prev.map((d, i) => (i === index ? '' : d)));
-			return;
-		}
-		// A paste fills forward from here; a keystroke fills one and advances.
-		// Kept out of the state updater so a StrictMode double-invoke cannot
-		// submit the code twice.
-		const next = [...digits];
-		for (let i = 0; i < clean.length && index + i < CODE_LENGTH; i += 1) {
-			next[index + i] = clean[i]!;
-		}
-		setDigits(next);
-		boxes.current[Math.min(index + clean.length, CODE_LENGTH - 1)]?.focus();
-		if (next.join('').length === CODE_LENGTH) {
-			verify(next.join(''));
-		}
-	}
-
-
-	const namesReady = firstName.trim().length > 0 && lastName.trim().length > 0;
-	const canSubmit = valid && !busy && (!isNew || namesReady);
-	const label = isNew ? 'Sign up' : 'Log in';
-
-	if (phase === 'code') {
-		return (
-			<CodeStep
-				email={email}
-				digits={digits}
-				boxes={boxes}
-				busy={busy}
-				error={error}
-				onDigit={setDigit}
-				onResend={() => {
-					setDigits(Array(CODE_LENGTH).fill(''));
-					send();
-				}}
-			/>
-		);
-	}
+	const canSubmit = !busy && (phase === 'reset' ? !!password : isEmail(email))
+		&& (phase !== 'email' || !isNew || (!!firstName.trim() && !!lastName.trim()))
+		&& (!enteringPassword || !!password)
+		&& (phase !== 'verify' || !!code.trim());
+	const title = phase === 'recover' || phase === 'reset' ? 'Reset password'
+		: phase === 'verify' ? 'Verify your email' : isNew ? 'Sign up' : 'Sign in to ghunami';
+	const buttonText = phase === 'email' ? (isNew ? 'Continue' : 'Continue with email')
+		: phase === 'recover' ? 'Send reset link' : phase === 'reset' ? 'Reset password'
+		: phase === 'verify' ? 'Verify email' : isNew ? 'Continue' : 'Sign in';
+	const linkClass = 'rounded px-1 text-sm font-medium text-accent-deep hover:underline disabled:text-mute';
 
 	return (
-		<AuthShell
-					title={isNew ? 'Sign up for ghunami' : 'Log in to ghunami'}
-					sub={isNew ? 'Create an account to get started.' : 'Welcome back. Log in to your account.'}
-				>
-			<Field
-				label="Email"
-				type="email"
-				name="email"
-				autoComplete="email"
-				autoFocus
-				inputMode="email"
-				value={email}
-				onChange={(event) => setEmail(event.currentTarget.value)}
-			/>
-
-			<button
-				type="button"
-				onClick={() => setIsNew(!isNew)}
-				disabled={busy}
-				className="px-2 text-sm font-medium text-accent-deep underline"
-			>
-				{isNew ? 'Already have an account? Log in' : 'New here? Sign up'}
-			</button>
-
-			{isNew && (
-				<div className="flex flex-col gap-3">
-					<div className="reveal">
-						<Field
-							label="First name"
-							name="firstName"
-							autoComplete="given-name"
-							value={firstName}
-							onChange={(event) => setFirstName(event.currentTarget.value)}
-						/>
+		<AuthShell title={title}>
+			<form ref={formRef} aria-label={title} aria-busy={busy} onSubmit={(event) => {
+				event.preventDefault();
+				if (!canSubmit) return;
+				setError(null);
+				setNotice(null);
+				if (phase === 'email') { setPhase('password'); return; }
+				fetcher.submit({
+					intent: phase === 'password' ? (isNew ? 'signup' : 'signin') : phase,
+					email, password, firstName, lastName, code, returnTo,
+					pendingAuthenticationToken: pendingToken, token: resetToken ?? ''
+				}, { method: 'post' });
+			}}>
+				<Section open={isNew && phase === 'email'}>
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+						<Field label="First name" name="firstName" autoComplete="given-name" placeholder="Your first name" value={firstName}
+							disabled={busy || phase !== 'email' || !isNew} onChange={(e) => setFirstName(e.currentTarget.value)} />
+						<Field label="Surname" name="lastName" autoComplete="family-name" placeholder="Your surname" value={lastName}
+							disabled={busy || phase !== 'email' || !isNew} onChange={(e) => setLastName(e.currentTarget.value)} />
 					</div>
-					<div className="reveal" style={{ animationDelay: '60ms' }}>
-						<Field
-							label="Last name"
-							name="lastName"
-							autoComplete="family-name"
-							value={lastName}
-							onChange={(event) => setLastName(event.currentTarget.value)}
-						/>
+				</Section>
+				<Section open={phase !== 'reset'}>
+					<div className="relative">
+						<Field label="Email" type="email" name="email" autoComplete="email" inputMode="email" value={email}
+							readOnly={phase === 'password' || phase === 'verify'} disabled={busy || phase === 'reset'}
+							onChange={(e) => setEmail(e.currentTarget.value)} />
+						{(phase === 'password' || phase === 'verify') && <button type="button" disabled={busy}
+							className={`${linkClass} absolute top-3 right-4`} onClick={() => changePhase('email')}>Change email</button>}
 					</div>
-				</div>
-			)}
-
-			{error && <p className="px-2 text-sm font-medium text-error">{error}</p>}
-
-			<button
-				type="button"
-				onClick={send}
-				disabled={!canSubmit}
-				className={`btn-press mt-1 w-full ${
-					canSubmit ? 'bg-accent text-card hover:bg-accent-deep' : 'bg-line text-mute'
-				}`}
-			>
-				{busy ? 'One moment' : label}
-			</button>
-
-			<div className="mt-2 flex items-center gap-3 px-2">
-				<span className="h-px flex-1 bg-line" />
-				<span className="text-xs font-extrabold tracking-wider text-mute uppercase">or</span>
-				<span className="h-px flex-1 bg-line" />
-			</div>
-
-			<a
-				href={`/auth/google?returnTo=${encodeURIComponent(returnTo)}`}
-				className="btn-press w-full border-2 border-line bg-card text-mute hover:text-ink"
-				style={{ ['--btn-edge' as string]: 'var(--color-line)' }}
-			>
-				<GoogleMark />
-				Continue with Google
-			</a>
+				</Section>
+				<Section open={enteringPassword}>
+					<div className="relative">
+						<Field label="Password" name="password" type={showPassword ? 'text' : 'password'}
+							autoComplete={isNew || phase === 'reset' ? 'new-password' : 'current-password'}
+							placeholder={isNew || phase === 'reset' ? 'Create a password' : 'Your password'}
+							value={password} disabled={busy || !enteringPassword} style={{ paddingRight: '3rem' }}
+							onChange={(e) => setPassword(e.currentTarget.value)} />
+						<button type="button" className={`${linkClass} absolute right-4 bottom-3`} aria-label={showPassword ? 'Hide password' : 'Show password'}
+							aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? 'Hide' : 'Show'}</button>
+					</div>
+					{!isNew && phase === 'password' && <button type="button" disabled={busy} className={`${linkClass} self-end`}
+						onClick={() => changePhase('recover')}>Reset password</button>}
+				</Section>
+				<Section open={phase === 'verify'}>
+					<p className="px-2 text-sm text-mute">Enter the verification code sent to your email.</p>
+					<Field label="Verification code" name="code" autoComplete="one-time-code" inputMode="numeric" value={code}
+						disabled={busy || phase !== 'verify'} onChange={(e) => setCode(e.currentTarget.value)} />
+				</Section>
+				{error && <p role="alert" className="mb-4 px-2 text-sm font-medium text-error">{error}</p>}
+				{notice && <p role="status" className="mb-4 px-2 text-sm text-mute">{notice}</p>}
+				<button type="submit" disabled={!canSubmit} className={`btn-press mb-4 w-full ${canSubmit ? 'bg-accent text-card hover:bg-accent-deep' : 'bg-line text-mute'}`}>
+					{busy ? 'One moment…' : buttonText}
+				</button>
+				<Section open={phase === 'email'}>
+					<div className="my-2 flex items-center gap-3 px-2">
+						<span className="h-px flex-1 bg-line" /><span className="text-xs font-extrabold tracking-wider text-mute uppercase">OR</span><span className="h-px flex-1 bg-line" />
+					</div>
+					<a href={`/auth/google?returnTo=${encodeURIComponent(returnTo)}`} className="btn-press mb-2 w-full border-2 border-line bg-card text-mute hover:text-ink"
+						style={{ ['--btn-edge' as string]: 'var(--color-line)' }}><GoogleMark />Continue with Google</a>
+				</Section>
+				<Section open={phase === 'email' || phase === 'password'}>
+					<p className="pt-2 text-center text-sm text-mute">
+						{isNew ? 'Already have an account? ' : 'Don’t have an account? '}
+						<button type="button" className={linkClass} disabled={busy} onClick={() => {
+							setIsNew(!isNew); changePhase('email');
+						}}>{isNew ? 'Sign in' : 'Sign up'}</button>
+					</p>
+				</Section>
+				<Section open={phase !== 'email'}>
+					<button type="button" className={`${linkClass} mx-auto mt-2`} disabled={busy} onClick={() => changePhase('email')}>
+						{phase === 'recover' || phase === 'reset' ? 'Back to sign in' : '‹ Change method'}
+					</button>
+				</Section>
+			</form>
 		</AuthShell>
 	);
 }
@@ -255,103 +240,10 @@ export default function SignIn() {
 function GoogleMark() {
 	return (
 		<svg viewBox="0 0 18 18" className="mr-3 h-4 w-4" aria-hidden="true">
-			<path
-				fill="#4285F4"
-				d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z"
-			/>
-			<path
-				fill="#34A853"
-				d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18Z"
-			/>
-			<path
-				fill="#FBBC05"
-				d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33Z"
-			/>
-			<path
-				fill="#EA4335"
-				d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58Z"
-			/>
+			<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62Z" />
+			<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33A9 9 0 0 0 9 18Z" />
+			<path fill="#FBBC05" d="M3.96 10.71a5.41 5.41 0 0 1 0-3.42V4.96H.96a9 9 0 0 0 0 8.08l3-2.33Z" />
+			<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58Z" />
 		</svg>
-	);
-}
-
-function CodeStep({
-	email,
-	digits,
-	boxes,
-	busy,
-	error,
-	onDigit,
-	onResend
-}: {
-	email: string;
-	digits: string[];
-	boxes: React.RefObject<Array<HTMLInputElement | null>>;
-	busy: boolean;
-	error: string | null | undefined;
-	onDigit: (index: number, value: string) => void;
-	onResend: () => void;
-}) {
-	return (
-		<AuthShell title="Confirm it’s you" sub={`Enter the code sent to ${email}`}>
-			<div className="-mt-4 flex justify-center pb-2">
-				<span className="relative inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-line bg-card">
-					<svg
-						viewBox="0 0 24 24"
-						className="h-7 w-7 text-ink"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						aria-hidden="true"
-					>
-						<rect x="2.5" y="5" width="19" height="14" rx="3" />
-						<path d="M3.5 7.5 12 13l8.5-5.5" />
-					</svg>
-					<span className="absolute -top-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-extrabold text-card">
-						1
-					</span>
-				</span>
-			</div>
-
-			<div className="flex justify-center gap-2" role="group" aria-label="Six-digit code">
-				{digits.map((digit, index) => (
-					<input
-						key={index}
-						ref={(node) => {
-							boxes.current[index] = node;
-						}}
-						value={digit}
-						onChange={(event) => onDigit(index, event.currentTarget.value)}
-						onKeyDown={(event) => {
-							if (event.key === 'Backspace' && !digit && index > 0) {
-								boxes.current[index - 1]?.focus();
-								onDigit(index - 1, '');
-							}
-						}}
-						inputMode="numeric"
-						autoComplete={index === 0 ? 'one-time-code' : 'off'}
-						maxLength={CODE_LENGTH}
-						aria-label={`Digit ${index + 1}`}
-						disabled={busy}
-						className="h-14 w-12 rounded-2xl border-2 border-line bg-card text-center text-xl font-extrabold text-ink transition-colors focus:border-accent focus:ring-0"
-					/>
-				))}
-			</div>
-
-			{error && <p className="text-center text-sm font-medium text-error">{error}</p>}
-
-			<div className="mt-2 flex flex-col items-center gap-1">
-				<button
-					type="button"
-					onClick={onResend}
-					disabled={busy}
-					className="font-ui rounded-full px-4 py-2 text-sm font-extrabold text-accent hover:bg-sun disabled:text-mute"
-				>
-					Resend code
-				</button>
-			</div>
-		</AuthShell>
 	);
 }
