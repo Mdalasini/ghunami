@@ -166,17 +166,28 @@ describe('funds auth and ownership', () => {
 		expect(theirs.page.map((row) => row.title)).toEqual(['Lee’s']);
 	});
 
-	it('is idempotent per owner key and sanitizes story HTML', async () => {
+	it('retries with the same key apply the latest fields and claim a new cover', async () => {
 		const t = harness();
 		const owner = await asUser(t, maya);
-		const a = await owner.mutation(api.funds.create, {
+		const a = await owner.mutation(api.funds.create, draft);
+		const jpeg = await storeTypedBlob(
+			t,
+			new Blob([new Uint8Array(32)], { type: 'image/jpeg' }),
+			'image/jpeg'
+		);
+		const uploadId = await owner.mutation(api.funds.registerUpload, { storageId: jpeg, kind: 'cover' });
+		const b = await owner.mutation(api.funds.create, {
 			...draft,
-			story: '<p onclick="x()">Hello <script>alert(1)</script><b>there</b></p>'
+			title: 'Duplicate',
+			story: '<p onclick="x()">Hello <script>alert(1)</script><b>there</b></p>',
+			coverSkipped: false,
+			coverUploadId: uploadId,
+			coverName: 'cover.jpg'
 		});
-		const b = await owner.mutation(api.funds.create, { ...draft, title: 'Duplicate' });
 		expect(b).toBe(a);
 		const preview = await owner.query(api.funds.getPreview, { fundID: a });
-		expect(preview?.title).toBe('Help Maya get home');
+		expect(preview?.title).toBe('Duplicate');
+		expect(preview?.hasCover).toBe(true);
 		expect(preview?.story).toBe('<p>Hello <strong>there</strong></p>');
 	});
 
@@ -210,6 +221,38 @@ describe('funds auth and ownership', () => {
 			other.mutation(api.funds.registerUpload, { storageId: jpeg, kind: 'cover' })
 		).rejects.toThrow(/could not be saved/);
 		expect(uploadId).toBeTruthy();
+	});
+
+	it('discards unattached owned uploads and leaves claimed or foreign ones', async () => {
+		const t = harness();
+		const owner = await asUser(t, maya);
+		const other = await asUser(t, lee);
+		const jpeg = await storeTypedBlob(
+			t,
+			new Blob([new Uint8Array(32)], { type: 'image/jpeg' }),
+			'image/jpeg'
+		);
+		const uploadId = await owner.mutation(api.funds.registerUpload, { storageId: jpeg, kind: 'cover' });
+		await expect(other.mutation(api.funds.discardUpload, { uploadId })).resolves.toBeNull();
+		await expect(owner.mutation(api.funds.discardUpload, { uploadId })).resolves.toBeNull();
+		await expect(
+			owner.mutation(api.funds.create, { ...draft, coverSkipped: false, coverUploadId: uploadId })
+		).rejects.toThrow(/could not be saved/);
+
+		const kept = await storeTypedBlob(
+			t,
+			new Blob([new Uint8Array(8)], { type: 'image/jpeg' }),
+			'image/jpeg'
+		);
+		const claimed = await owner.mutation(api.funds.registerUpload, { storageId: kept, kind: 'cover' });
+		const fundID = await owner.mutation(api.funds.create, {
+			...draft,
+			idempotencyKey: 'keep-1-aaaaaaaa',
+			coverSkipped: false,
+			coverUploadId: claimed
+		});
+		await expect(owner.mutation(api.funds.discardUpload, { uploadId: claimed })).resolves.toBeNull();
+		expect((await owner.query(api.funds.getPreview, { fundID }))?.hasCover).toBe(true);
 	});
 });
 

@@ -23,7 +23,7 @@ http.route({
 		return new Response(blob, {
 			headers: {
 				'Content-Type': file.contentType,
-				'Cache-Control': 'private, max-age=60',
+				'Cache-Control': 'no-store',
 				'X-Content-Type-Options': 'nosniff'
 			}
 		});

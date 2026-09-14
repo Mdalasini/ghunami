@@ -140,6 +140,7 @@ function CreateForm() {
 	const saved = useQuery(api.funds.getPreview, editing ? { fundID: fundIDParam } : 'skip');
 	const generateUploadUrl = useMutation(api.funds.generateUploadUrl);
 	const registerUpload = useMutation(api.funds.registerUpload);
+	const discardUpload = useMutation(api.funds.discardUpload);
 	const createFund = useMutation(api.funds.create);
 	const updateFund = useMutation(api.funds.update);
 
@@ -292,6 +293,7 @@ function CreateForm() {
 				draft: getDraft(),
 				generateUploadUrl: () => generateUploadUrl({}),
 				registerUpload: (args) => registerUpload(args),
+				discardUpload: (args) => discardUpload(args),
 				create: (args) => createFund(args),
 				update: (args) => updateFund(args)
 			});

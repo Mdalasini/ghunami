@@ -107,6 +107,76 @@ async function releaseUpload(ctx: MutationCtx, storageId: Id<'_storage'> | undef
 	await deleteStorage(ctx, storageId);
 }
 
+async function writeOwnedFund(
+	ctx: MutationCtx,
+	ownerId: Id<'users'>,
+	fund: Doc<'funds'>,
+	args: {
+		goal: number;
+		title: string;
+		story: string;
+		coverSkipped: boolean;
+		coverUploadId?: Id<'uploads'>;
+		originalUploadId?: Id<'uploads'>;
+		coverCrop?: { x: number; y: number; width: number; height: number };
+		coverName?: string;
+		cover: 'keep' | 'replace' | 'clear';
+	}
+) {
+	const goal = parseGoal(args.goal);
+	const title = parseTitle(args.title);
+	const story = parseStory(args.story);
+	const now = Date.now();
+
+	if (args.cover === 'keep') {
+		await ctx.db.patch(fund._id, { goal, title, story, updatedAt: now });
+		return fund.fundID;
+	}
+
+	if (args.cover === 'clear') {
+		await releaseUpload(ctx, fund.coverStorageId);
+		await releaseUpload(ctx, fund.coverOriginalStorageId);
+		await ctx.db.patch(fund._id, {
+			goal,
+			title,
+			story,
+			coverStorageId: undefined,
+			coverOriginalStorageId: undefined,
+			coverCrop: undefined,
+			coverName: undefined,
+			coverSkipped: args.coverSkipped,
+			updatedAt: now
+		});
+		return fund.fundID;
+	}
+
+	const cover = await claimUpload(ctx, ownerId, args.coverUploadId, 'cover', fund._id);
+	if (!cover) throw new Error('That photo could not be saved. Try another one.');
+	const original = await claimUpload(ctx, ownerId, args.originalUploadId, 'original', fund._id);
+
+	if (fund.coverStorageId && fund.coverStorageId !== cover.storageId) {
+		await releaseUpload(ctx, fund.coverStorageId);
+	}
+	if (fund.coverOriginalStorageId && fund.coverOriginalStorageId !== original?.storageId) {
+		await releaseUpload(ctx, fund.coverOriginalStorageId);
+	}
+
+	await ctx.db.patch(fund._id, {
+		goal,
+		title,
+		story,
+		coverStorageId: cover.storageId,
+		coverOriginalStorageId: original?.storageId,
+		coverCrop: original && args.coverCrop ? args.coverCrop : undefined,
+		coverName: args.coverName,
+		coverSkipped: false,
+		updatedAt: now
+	});
+	await ctx.db.patch(cover._id, { fundDocId: fund._id });
+	if (original) await ctx.db.patch(original._id, { fundDocId: fund._id });
+	return fund.fundID;
+}
+
 export const generateUploadUrl = mutation({
 	args: {},
 	returns: v.string(),
@@ -172,7 +242,12 @@ export const create = mutation({
 				q.eq('ownerId', user._id).eq('idempotencyKey', idempotencyKey)
 			)
 			.unique();
-		if (existing) return existing.fundID;
+		if (existing) {
+			return await writeOwnedFund(ctx, user._id, existing, {
+				...args,
+				cover: args.coverUploadId ? 'replace' : 'keep'
+			});
+		}
 
 		const goal = parseGoal(args.goal);
 		const title = parseTitle(args.title);
@@ -204,6 +279,19 @@ export const create = mutation({
 	}
 });
 
+export const discardUpload = mutation({
+	args: { uploadId: v.id('uploads') },
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const user = await requireUser(ctx);
+		const upload = await ctx.db.get(args.uploadId);
+		if (!upload || upload.ownerId !== user._id || upload.fundDocId !== null) return null;
+		await ctx.db.delete(upload._id);
+		await deleteStorage(ctx, upload.storageId);
+		return null;
+	}
+});
+
 export const update = mutation({
 	args: {
 		fundID: v.string(),
@@ -222,59 +310,7 @@ export const update = mutation({
 		const user = await requireUser(ctx);
 		const fund = await ownedFund(ctx, args.fundID, user._id);
 		if (!fund) throw new Error('Fund not found');
-
-		const goal = parseGoal(args.goal);
-		const title = parseTitle(args.title);
-		const story = parseStory(args.story);
-		const now = Date.now();
-
-		if (args.cover === 'keep') {
-			await ctx.db.patch(fund._id, { goal, title, story, updatedAt: now });
-			return fund.fundID;
-		}
-
-		if (args.cover === 'clear') {
-			await releaseUpload(ctx, fund.coverStorageId);
-			await releaseUpload(ctx, fund.coverOriginalStorageId);
-			await ctx.db.patch(fund._id, {
-				goal,
-				title,
-				story,
-				coverStorageId: undefined,
-				coverOriginalStorageId: undefined,
-				coverCrop: undefined,
-				coverName: undefined,
-				coverSkipped: args.coverSkipped,
-				updatedAt: now
-			});
-			return fund.fundID;
-		}
-
-		const cover = await claimUpload(ctx, user._id, args.coverUploadId, 'cover', fund._id);
-		if (!cover) throw new Error('That photo could not be saved. Try another one.');
-		const original = await claimUpload(ctx, user._id, args.originalUploadId, 'original', fund._id);
-
-		if (fund.coverStorageId && fund.coverStorageId !== cover.storageId) {
-			await releaseUpload(ctx, fund.coverStorageId);
-		}
-		if (fund.coverOriginalStorageId && fund.coverOriginalStorageId !== original?.storageId) {
-			await releaseUpload(ctx, fund.coverOriginalStorageId);
-		}
-
-		await ctx.db.patch(fund._id, {
-			goal,
-			title,
-			story,
-			coverStorageId: cover.storageId,
-			coverOriginalStorageId: original?.storageId,
-			coverCrop: original && args.coverCrop ? args.coverCrop : undefined,
-			coverName: args.coverName,
-			coverSkipped: false,
-			updatedAt: now
-		});
-		await ctx.db.patch(cover._id, { fundDocId: fund._id });
-		if (original) await ctx.db.patch(original._id, { fundDocId: fund._id });
-		return fund.fundID;
+		return await writeOwnedFund(ctx, user._id, fund, args);
 	}
 });
 
