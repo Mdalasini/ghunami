@@ -4,6 +4,8 @@ export type CoverEdit = {
 };
 
 export type CreateDraft = {
+	fundID: string;
+	idempotencyKey: string;
 	goal: number | null;
 	coverUrl: string;
 	coverName: string;
@@ -15,7 +17,13 @@ export type CreateDraft = {
 	story: string;
 };
 
+function newIdempotencyKey() {
+	return crypto.randomUUID();
+}
+
 const emptyDraft = (): CreateDraft => ({
+	fundID: '',
+	idempotencyKey: newIdempotencyKey(),
 	goal: null,
 	coverUrl: '',
 	coverName: '',

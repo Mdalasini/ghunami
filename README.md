@@ -46,18 +46,18 @@ Before deploying:
 | Layer | Command | Checks | Mocks / isolation |
 | --- | --- | --- | --- |
 | Unit | `npm test` (node project) | Draft store, `safeReturnTo`, encrypted session cookies | No `.env.local`. `process.loadEnvFile` is stubbed. Session tests use a labeled test-only key. |
-| Convex functions | `npm test` (convex / authFlow projects) | `users.me`, `upsertFromWorkOS`, legacy user-field migration; `authFlow` password/signup/verification/reset/Google/refresh | `convex-test` in-memory database. **Does not** validate a deployed Convex or WorkOS integration. `authFlow` tests mock `@workos-inc/node` and use labeled test-only env vars; they never construct a network WorkOS client. |
+| Convex functions | `npm test` (convex / authFlow projects) | `users.me`, `upsertFromWorkOS`, owner-private funds, short `fundID` allocation, media auth; `authFlow` password/signup/verification/reset/Google/refresh | `convex-test` in-memory database. **Does not** validate a deployed Convex or WorkOS integration. `authFlow` tests mock `@workos-inc/node` and use labeled test-only env vars; they never construct a network WorkOS client. |
 | Server routes | `npm test` (node project) | Sign-in, token refresh, sign-out, Google/callback | `convexServer()` and `loadServerEnv()` mocked. Real cookie sealing is used in a subset of tests. JWT payloads are local expiry fixtures, not signature proofs. |
-| Browser | `npm run test:e2e` | Signed-out home, local create-draft flow, sign-in validation, retained form state, password/recovery views, reduced motion | Production build + `npm run start`. Does not reuse an existing server. Browser requests off the app origin (including WebSockets) are blocked. `/auth/token` returns a signed-out fixture. Node SSR is not intercepted by page routes; those journeys avoid loaders that call Convex. |
+| Browser | `npm run test:e2e` | Signed-out home, auth redirects for `/create` `/funds` `/preview/:fundID`, local create-draft flow, sign-in validation | Production build + `npm run start`. Does not reuse an existing server. Browser requests off the app origin (including WebSockets) are blocked. `/auth/token` is stubbed. Node SSR is not intercepted by page routes; those journeys avoid loaders that call Convex. |
 
-`/create` is not auth-gated in the current app.
+`/create`, `/preview/:fundID`, and `/funds` require a signed-in session.
 
 ## Isolation caveats
 
 - Tests must not read developer `.env.local`. Vitest sets `envDir: false` and `GHUNAMI_ISOLATED_TEST=1`. The app skips `loadEnvFile` and Vite env files when that flag is set. Do not delete or rewrite `.env.local`.
 - Builds still need a syntactically valid `VITE_CONVEX_URL` because the client module checks it at import time.
 - Real WorkOS password login, verification/reset email delivery, OAuth, and hosted Convex remain outside this suite.
-- The in-memory draft does not survive a reload. Review does not publish a campaign.
+- The in-memory draft is only a working copy. Previewing persists an owner-private draft in Convex. Review does not publish a campaign.
 
 ## Adding an isolated fixture or scenario
 

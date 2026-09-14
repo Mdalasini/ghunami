@@ -1,7 +1,8 @@
 import { ConvexProviderWithAuth } from 'convex/react';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useFetchers, useLocation } from 'react-router';
 
+import { DraftIsolation } from './DraftIsolation';
 import { convex } from '../lib/convex';
 
 async function requestToken(force: boolean): Promise<string | null> {
@@ -80,19 +81,38 @@ function useServerAuth() {
 		[]
 	);
 
-	return {
-		isLoading: token === undefined,
-		isAuthenticated: token != null,
-		fetchAccessToken
-	};
+	return useMemo(
+		() => ({
+			isLoading: token === undefined,
+			isAuthenticated: token != null,
+			fetchAccessToken
+		}),
+		[token, fetchAccessToken]
+	);
 }
 
+const SessionAuth = createContext<ReturnType<typeof useServerAuth> | null>(null);
+
+/** Cookie/token presence, not Convex backend confirmation (that never arrives in isolated e2e). */
+export function useSessionAuth() {
+	const value = useContext(SessionAuth);
+	if (!value) throw new Error('useSessionAuth requires ConvexClientProvider');
+	return value;
+}
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
-	return (
-		<ConvexProviderWithAuth client={convex} useAuth={useServerAuth}>
+	return <SessionAuthTree>{children}</SessionAuthTree>;
+}
 
-			{children}
-		</ConvexProviderWithAuth>
+function SessionAuthTree({ children }: { children: ReactNode }) {
+	const auth = useServerAuth();
+	const useAuth = useCallback(() => auth, [auth]);
+	return (
+		<SessionAuth.Provider value={auth}>
+			<ConvexProviderWithAuth client={convex} useAuth={useAuth}>
+				<DraftIsolation />
+				{children}
+			</ConvexProviderWithAuth>
+		</SessionAuth.Provider>
 	);
 }

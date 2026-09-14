@@ -24,6 +24,8 @@ describe('safeReturnTo', () => {
 	it('keeps same-origin paths with query and hash', () => {
 		expect(safeReturnTo('/create')).toBe('/create');
 		expect(safeReturnTo('/signin?next=1#box')).toBe('/signin?next=1#box');
+		expect(safeReturnTo('/create.data')).toBe('/create');
+		expect(safeReturnTo('/create.data?step=2')).toBe('/create?step=2');
 	});
 
 	it('does not treat backslash or control characters as a safe path', () => {
