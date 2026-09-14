@@ -2,7 +2,7 @@ import { useQuery } from 'convex/react';
 import { Link, useParams } from 'react-router';
 import { api } from '../../convex/_generated/api';
 import { AuthGate } from '../components/AuthGate';
-import { BrandLink } from '../components/BrandLink';
+import { SiteHeader } from '../components/BrandLink';
 import { CoverImage } from '../components/CoverImage';
 import { HorizonDisc } from '../components/HorizonMark';
 import { isFundID } from '../../convex/lib/fundId';
@@ -232,14 +232,11 @@ export default function FundPreview() {
 	return (
 		<AuthGate>
 			<div className="flex min-h-dvh flex-col">
-				<header className="border-b border-line bg-paper">
-					<div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
-						<BrandLink />
-						<span className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-mute">
-							Draft preview
-						</span>
-					</div>
-				</header>
+				<SiteHeader>
+					<span className="rounded-full border border-line bg-card px-3 py-1.5 text-xs font-bold text-mute">
+						Draft preview
+					</span>
+				</SiteHeader>
 				{valid ? <PreviewBody fundID={fundID} /> : <Missing />}
 			</div>
 		</AuthGate>

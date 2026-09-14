@@ -14,6 +14,7 @@ import { api } from '../../convex/_generated/api';
 import { TITLE_MAX } from '../../convex/lib/fundFields';
 import { isFundID } from '../../convex/lib/fundId';
 import { AuthGate } from '../components/AuthGate';
+import { SiteHeader } from '../components/BrandLink';
 import { CoverPhotoField, type CoverPhotoFieldHandle } from '../components/CoverPhotoField';
 import {
 	PLAIN_FORMATS,
@@ -526,7 +527,7 @@ function CreateForm() {
 				/>
 			</div>
 
-			<header className="mx-auto flex w-full max-w-[44rem] items-center justify-end px-6 pt-6">
+			<SiteHeader brand={false}>
 				<Link
 					to="/"
 					aria-label="Cancel and go home"
@@ -544,7 +545,7 @@ function CreateForm() {
 						<path d="M3 3l10 10M13 3L3 13" />
 					</svg>
 				</Link>
-			</header>
+			</SiteHeader>
 
 			<main className="mx-auto flex w-full max-w-[44rem] flex-1 flex-col justify-center px-6 py-10 md:py-16">
 				<form
