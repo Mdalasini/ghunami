@@ -13,12 +13,14 @@ const cropValidator = v.object({
 	height: v.number()
 });
 
+const fundStatus = v.union(v.literal('draft'), v.literal('live'));
+
 const previewReturn = v.object({
 	fundID: v.string(),
 	goal: v.number(),
 	title: v.string(),
 	story: v.string(),
-	status: v.literal('draft'),
+	status: fundStatus,
 	coverSkipped: v.boolean(),
 	hasCover: v.boolean(),
 	hasOriginal: v.boolean(),
@@ -33,10 +35,28 @@ const listItem = v.object({
 	fundID: v.string(),
 	title: v.string(),
 	goal: v.number(),
-	status: v.literal('draft'),
+	status: fundStatus,
 	hasCover: v.boolean(),
 	createdAt: v.number()
 });
+
+const publicReturn = v.object({
+	fundID: v.string(),
+	goal: v.number(),
+	title: v.string(),
+	story: v.string(),
+	status: v.literal('live'),
+	hasCover: v.boolean(),
+	organiserName: v.string(),
+	publishedAt: v.optional(v.number()),
+	updatedAt: v.number()
+});
+
+function publicOrganiserName(name: string | undefined): string {
+	const trimmed = name?.trim() ?? '';
+	if (!trimmed || trimmed.includes('@')) return 'An organiser';
+	return trimmed;
+}
 
 async function fundByPublicId(ctx: QueryCtx | MutationCtx, fundID: string) {
 	if (!isFundID(fundID)) return null;
@@ -314,6 +334,57 @@ export const update = mutation({
 	}
 });
 
+export const publish = mutation({
+	args: { fundID: v.string() },
+	returns: v.object({
+		fundID: v.string(),
+		title: v.string(),
+		status: v.literal('live'),
+		publishedAt: v.number()
+	}),
+	handler: async (ctx, args) => {
+		const user = await requireUser(ctx);
+		const fund = await ownedFund(ctx, args.fundID, user._id);
+		if (!fund) throw new Error('Fund not found');
+		parseGoal(fund.goal);
+		parseTitle(fund.title);
+		parseStory(fund.story);
+		if (fund.status === 'live' && fund.publishedAt !== undefined) {
+			return {
+				fundID: fund.fundID,
+				title: fund.title,
+				status: 'live' as const,
+				publishedAt: fund.publishedAt
+			};
+		}
+		const now = Date.now();
+		const publishedAt = fund.publishedAt ?? now;
+		await ctx.db.patch(fund._id, { status: 'live', publishedAt, updatedAt: now });
+		return { fundID: fund.fundID, title: fund.title, status: 'live' as const, publishedAt };
+	}
+});
+
+export const getPublic = query({
+	args: { fundID: v.string() },
+	returns: v.union(publicReturn, v.null()),
+	handler: async (ctx, args) => {
+		const fund = await fundByPublicId(ctx, args.fundID);
+		if (!fund || fund.status !== 'live') return null;
+		const owner = await ctx.db.get(fund.ownerId);
+		return {
+			fundID: fund.fundID,
+			goal: fund.goal,
+			title: fund.title,
+			story: fund.story,
+			status: 'live' as const,
+			hasCover: fund.coverStorageId !== undefined,
+			organiserName: publicOrganiserName(owner?.name),
+			publishedAt: fund.publishedAt,
+			updatedAt: fund.updatedAt
+		};
+	}
+});
+
 export const getPreview = query({
 	args: { fundID: v.string() },
 	returns: v.union(previewReturn, v.null()),
@@ -354,7 +425,7 @@ export const listMine = query({
 	}
 });
 
-export const mediaForOwner = internalQuery({
+export const mediaFile = internalQuery({
 	args: {
 		fundID: v.string(),
 		kind: v.union(v.literal('cover'), v.literal('original'))
@@ -367,10 +438,15 @@ export const mediaForOwner = internalQuery({
 		v.null()
 	),
 	handler: async (ctx, args) => {
-		const user = await getCurrentUserOrNull(ctx);
-		if (!user) return null;
-		const fund = await ownedFund(ctx, args.fundID, user._id);
+		const fund = await fundByPublicId(ctx, args.fundID);
 		if (!fund) return null;
+		const user = await getCurrentUserOrNull(ctx);
+		const isOwner = user !== null && fund.ownerId === user._id;
+		if (args.kind === 'original') {
+			if (!isOwner) return null;
+		} else if (fund.status !== 'live' && !isOwner) {
+			return null;
+		}
 		const storageId = args.kind === 'original' ? fund.coverOriginalStorageId : fund.coverStorageId;
 		if (!storageId) return null;
 		const meta = await ctx.db.system.get('_storage', storageId);

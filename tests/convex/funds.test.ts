@@ -81,10 +81,11 @@ describe('fund IDs', () => {
 });
 
 describe('funds auth and ownership', () => {
-	it('rejects unauthenticated create, read, update, list, and uploads', async () => {
+	it('rejects unauthenticated create, read, update, list, publish, and uploads', async () => {
 		const t = harness();
 		await expect(t.mutation(api.funds.create, draft)).rejects.toThrow(/Not authenticated/);
 		await expect(t.query(api.funds.getPreview, { fundID: 'Ab3' })).rejects.toThrow(/Not authenticated/);
+		await expect(t.mutation(api.funds.publish, { fundID: 'Ab3' })).rejects.toThrow(/Not authenticated/);
 		await expect(
 			t.mutation(api.funds.update, {
 				fundID: 'Ab3',
@@ -291,5 +292,128 @@ describe('fund media HTTP', () => {
 		expect(ok.status).toBe(200);
 		expect(ok.headers.get('Content-Type')).toMatch(/image\/jpeg/);
 		expect(new Uint8Array(await ok.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+	});
+
+	it('serves live covers anonymously and keeps originals owner-only', async () => {
+		const t = harness();
+		const owner = await asUser(t, maya);
+		const other = await asUser(t, lee);
+		const cover = await storeTypedBlob(
+			t,
+			new Blob([new Uint8Array([9, 8, 7])], { type: 'image/jpeg' }),
+			'image/jpeg'
+		);
+		const original = await storeTypedBlob(
+			t,
+			new Blob([new Uint8Array([4, 5, 6])], { type: 'image/jpeg' }),
+			'image/jpeg'
+		);
+		const coverId = await owner.mutation(api.funds.registerUpload, { storageId: cover, kind: 'cover' });
+		const originalId = await owner.mutation(api.funds.registerUpload, { storageId: original, kind: 'original' });
+		const fundID = await owner.mutation(api.funds.create, {
+			...draft,
+			idempotencyKey: 'media-live-aaaaaaaa',
+			coverSkipped: false,
+			coverUploadId: coverId,
+			originalUploadId: originalId,
+			coverName: 'cover.jpg'
+		});
+
+		expect((await t.fetch(`/media?fundID=${fundID}&kind=cover`)).status).toBe(404);
+		await owner.mutation(api.funds.publish, { fundID });
+
+		const anonCover = await t.fetch(`/media?fundID=${fundID}&kind=cover`);
+		expect(anonCover.status).toBe(200);
+		expect(new Uint8Array(await anonCover.arrayBuffer())).toEqual(new Uint8Array([9, 8, 7]));
+		expect((await t.fetch(`/media?fundID=${fundID}&kind=original`)).status).toBe(404);
+		expect((await other.fetch(`/media?fundID=${fundID}&kind=original`)).status).toBe(404);
+		const ownedOriginal = await owner.fetch(`/media?fundID=${fundID}&kind=original`);
+		expect(ownedOriginal.status).toBe(200);
+		expect(new Uint8Array(await ownedOriginal.arrayBuffer())).toEqual(new Uint8Array([4, 5, 6]));
+	});
+});
+
+describe('publishing', () => {
+	it('lets the owner publish a valid draft and hides drafts from the public query', async () => {
+		const t = harness();
+		const owner = await asUser(t, maya);
+		const other = await asUser(t, lee);
+		const fundID = await owner.mutation(api.funds.create, draft);
+
+		expect(await t.query(api.funds.getPublic, { fundID })).toBeNull();
+		expect(await t.query(api.funds.getPublic, { fundID: 'nope' })).toBeNull();
+		expect(await t.query(api.funds.getPublic, { fundID: 'zzz' })).toBeNull();
+
+		await expect(other.mutation(api.funds.publish, { fundID })).rejects.toThrow(/Fund not found/);
+		await expect(owner.mutation(api.funds.publish, { fundID: 'zzz' })).rejects.toThrow(/Fund not found/);
+
+		const published = await owner.mutation(api.funds.publish, { fundID });
+		expect(published).toMatchObject({ fundID, title: draft.title, status: 'live' });
+		expect(published.publishedAt).toBeGreaterThan(0);
+
+		const pub = await t.query(api.funds.getPublic, { fundID });
+		expect(pub).toMatchObject({
+			fundID,
+			title: draft.title,
+			goal: 50_000,
+			status: 'live',
+			hasCover: false,
+			organiserName: 'Maya Otieno'
+		});
+		expect(pub?.story).toContain('Maya');
+		expect(pub).not.toHaveProperty('ownerId');
+		expect(pub).not.toHaveProperty('email');
+		expect(pub).not.toHaveProperty('idempotencyKey');
+		expect(pub).not.toHaveProperty('coverStorageId');
+		expect(pub).not.toHaveProperty('coverOriginalStorageId');
+		expect(pub).not.toHaveProperty('coverCrop');
+		expect(pub).not.toHaveProperty('coverName');
+		expect(pub).not.toHaveProperty('coverSkipped');
+		expect(JSON.stringify(pub)).not.toMatch(/maya@example.com/);
+
+		expect((await owner.query(api.funds.getPreview, { fundID }))?.status).toBe('live');
+		const listed = await owner.query(api.funds.listMine, { paginationOpts: { numItems: 10, cursor: null } });
+		expect(listed.page[0]?.status).toBe('live');
+	});
+
+	it('keeps publishedAt on repeat publish and after owner edits or create retries', async () => {
+		const t = harness();
+		const owner = await asUser(t, maya);
+		const fundID = await owner.mutation(api.funds.create, draft);
+		await owner.mutation(api.funds.publish, { fundID });
+		await t.run(async (ctx) => {
+			const fund = await ctx.db
+				.query('funds')
+				.withIndex('by_fundID', (q) => q.eq('fundID', fundID))
+				.unique();
+			if (!fund) throw new Error('missing fund');
+			await ctx.db.patch(fund._id, { publishedAt: 42 });
+		});
+
+		const again = await owner.mutation(api.funds.publish, { fundID });
+		expect(again.publishedAt).toBe(42);
+		expect((await t.query(api.funds.getPublic, { fundID }))?.publishedAt).toBe(42);
+
+		await owner.mutation(api.funds.update, {
+			fundID,
+			goal: 75_000,
+			title: 'Help Maya fly home',
+			story: draft.story,
+			coverSkipped: true,
+			cover: 'keep'
+		});
+		expect(await t.query(api.funds.getPublic, { fundID })).toMatchObject({
+			title: 'Help Maya fly home',
+			goal: 75_000,
+			status: 'live',
+			publishedAt: 42
+		});
+
+		await owner.mutation(api.funds.create, { ...draft, title: 'Still live' });
+		expect(await t.query(api.funds.getPublic, { fundID })).toMatchObject({
+			title: 'Still live',
+			status: 'live',
+			publishedAt: 42
+		});
 	});
 });
