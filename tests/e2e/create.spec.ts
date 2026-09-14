@@ -253,6 +253,9 @@ test('shows only the saved frame and clamps zoom before quality degrades', async
 	// On a taller screen the photo fills the column, as wide as the upload box.
 	await page.setViewportSize({ width: 1280, height: 1000 });
 	await expect.poll(async () => (await viewport.boundingBox())!.width).toBeGreaterThan(560);
+	// Short / landscape viewports must keep a usable crop, even if the page has to scroll.
+	await page.setViewportSize({ width: 667, height: 375 });
+	await expect.poll(async () => (await viewport.boundingBox())!.width).toBeGreaterThanOrEqual(320);
 	await page.setViewportSize({ width: 1280, height: 720 });
 	expect(Math.abs(bounds!.width - cropBounds!.width)).toBeLessThanOrEqual(1);
 	expect(Math.abs(bounds!.height - cropBounds!.height)).toBeLessThanOrEqual(1);

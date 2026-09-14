@@ -341,8 +341,8 @@ export function CoverPhotoField({
 			) : (
 				<div
 					className="relative isolate w-full overflow-hidden rounded-3xl bg-ink"
-					// Full column width, shrinking on short screens so the OK button below stays in view.
-					style={{ maxWidth: `min(100%, calc((100svh - 28rem) * ${COVER_ASPECT}))` }}
+					// Shrink on short screens so OK stays nearby, but never below a usable crop (20rem).
+					style={{ maxWidth: `min(100%, max(20rem, calc((100svh - 28rem) * ${COVER_ASPECT})))` }}
 					onDragOver={onDragOver}
 					onDragLeave={() => setDragging(false)}
 					onDrop={onDrop}
