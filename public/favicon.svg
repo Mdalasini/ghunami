@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
-<title id="title">Horizon</title>
-<desc id="desc">A wide rising semicircle over two receding horizontal bands. A calm, expansive view of possibility.</desc>
-<rect width="400" height="400" fill="#FFE8A3"/>
-<g fill="#1B1B1B">
+<title id="title">ghunami</title>
+<desc id="desc">A wide rising semicircle over two receding horizontal bands on a round black field.</desc>
+<circle cx="200" cy="200" r="200" fill="#0f1a12"/>
+<g fill="#ffffff">
 <path d="M100 214A100 100 0 0 1 300 214Z"/>
 <path d="M76 234H324V258H76Z"/>
 <path d="M116 278H284V302H116Z"/>

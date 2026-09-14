@@ -7,7 +7,7 @@ import { clearedOAuthStateCookie, validateOAuthState } from '../lib/oauthState.s
 import { sessionCookie } from '../lib/session.server';
 
 export function meta() {
-	return [{ title: 'Signing in · Ghunami' }];
+	return [{ title: 'Signing in · ghunami' }];
 }
 
 /** Lands here after Google. Exchanges the code and seals the session. */

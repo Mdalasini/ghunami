@@ -17,8 +17,8 @@ export function AuthShell({
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex min-h-dvh flex-col bg-paper px-4 py-8">
-			<header className="mx-auto w-full max-w-md">
+		<div className="flex min-h-dvh flex-col bg-paper px-6 py-8 md:px-12">
+			<header>
 				<Link
 					to="/"
 					className="font-ui inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-mute hover:bg-sun hover:text-ink"
