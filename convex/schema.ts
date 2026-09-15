@@ -39,9 +39,56 @@ export default defineSchema({
 		publishedAt: v.optional(v.number()),
 		idempotencyKey: v.string(),
 		createdAt: v.number(),
-		updatedAt: v.number()
+		updatedAt: v.number(),
+		sandboxRaised: v.optional(v.number()),
+		sandboxDonationCount: v.optional(v.number()),
+		liveRaised: v.optional(v.number()),
+		liveDonationCount: v.optional(v.number())
 	})
 		.index('by_fundID', ['fundID'])
 		.index('by_owner_created', ['ownerId', 'createdAt'])
-		.index('by_owner_idempotency', ['ownerId', 'idempotencyKey'])
+		.index('by_owner_idempotency', ['ownerId', 'idempotencyKey']),
+
+	donationAttempts: defineTable({
+		fundDocId: v.id('funds'),
+		fundID: v.string(),
+		amount: v.number(),
+		currency: v.literal('KES'),
+		environment: v.union(v.literal('sandbox'), v.literal('production')),
+		phone: v.string(),
+		guestSessionId: v.string(),
+		userId: v.optional(v.id('users')),
+		status: v.union(
+			v.literal('pending'),
+			v.literal('accepted'),
+			v.literal('unknown'),
+			v.literal('succeeded'),
+			v.literal('cancelled'),
+			v.literal('failed')
+		),
+		credited: v.boolean(),
+		idempotencyKey: v.string(),
+		statusKey: v.string(),
+		callbackKey: v.string(),
+		merchantRequestId: v.optional(v.string()),
+		checkoutRequestId: v.optional(v.string()),
+		receipt: v.optional(v.string()),
+		resultCode: v.optional(v.number()),
+		resultDesc: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number()
+	})
+		.index('by_idempotencyKey', ['idempotencyKey'])
+		.index('by_statusKey', ['statusKey'])
+		.index('by_callbackKey', ['callbackKey'])
+		.index('by_checkoutRequestId', ['checkoutRequestId'])
+		.index('by_phone_created', ['phone', 'createdAt'])
+		.index('by_guest_created', ['guestSessionId', 'createdAt'])
+		.index('by_fund_env_status_created', ['fundDocId', 'environment', 'status', 'createdAt']),
+
+	mpesaOAuth: defineTable({
+		environment: v.string(),
+		accessToken: v.string(),
+		expiresAt: v.number()
+	}).index('by_environment', ['environment'])
 });
