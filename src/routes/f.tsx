@@ -3,7 +3,7 @@ import { data, Link, redirect, useLoaderData, type LoaderFunctionArgs } from 're
 import { api } from '../../convex/_generated/api';
 import { isFundID } from '../../convex/lib/fundId';
 import { SiteHeader } from '../components/BrandLink';
-import { FundActions, FundCover, FundDonations, FundProgress, FundStory } from '../components/FundView';
+import { FundActions, FundCover, FundDonations, FundProgress, FundStory, useFundSupport } from '../components/FundView';
 import { convexServer } from '../lib/convex.server';
 import { fundPath, isCanonicalFundPath } from '../lib/fundUrl';
 import { coverMediaUrl } from '../lib/media';
@@ -77,16 +77,33 @@ function Missing() {
 
 export default function PublicFundPage() {
 	const { fund, origin } = useLoaderData<LoaderData>();
+	const support = useFundSupport(fund?.fundID ?? null);
 	if (!fund) return <Missing />;
-
 	const organiser = fund.organiserName;
 	const coverUrl = fund.hasCover ? coverMediaUrl(fund.fundID, 'cover', fund.updatedAt) : '';
 	const shareUrl = `${origin}${fundPath(fund.fundID, fund.title)}`;
+	const donateEnabled = support.donateEnabled;
+	const footnote = donateEnabled
+		? 'Test payments via M-PESA sandbox. Donations collect to Ghunami’s PayBill.'
+		: 'Donations aren’t available yet.';
+	const progress = {
+		goal: fund.goal,
+		raised: support.raised,
+		donationCount: support.donationCount,
+		testPayments: support.testPayments
+	};
+	const actions = {
+		shareUrl,
+		footnote,
+		donateEnabled,
+		onDonate: support.openDonate
+	};
 
 	return (
 		<div className="flex min-h-dvh flex-col">
 			<SiteHeader />
 			<OwnerManageBar fundID={fund.fundID} />
+			{support.donateDialog}
 			<main className="slide-forward mx-auto w-full max-w-6xl flex-1 px-6 pt-8 pb-48 md:pt-12 lg:pb-20">
 				<div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-12">
 					<article className="min-w-0">
@@ -108,18 +125,18 @@ export default function PublicFundPage() {
 						</section>
 					</article>
 					<aside className="rounded-3xl border border-line bg-card p-6 lg:sticky lg:top-8" aria-label="Fundraising">
-						<FundProgress goal={fund.goal} />
+						<FundProgress {...progress} />
 						<div className="hidden lg:block">
-							<FundActions shareUrl={shareUrl} footnote="Donations coming soon." />
+							<FundActions {...actions} />
 						</div>
-						<FundDonations />
+						<FundDonations count={support.donationCount} donations={support.donations} />
 					</aside>
 				</div>
 			</main>
 			<div className="fixed inset-x-0 bottom-0 z-10 px-3 pb-3 lg:hidden">
 				<div className="mx-auto max-w-xl rounded-3xl border border-line bg-card p-4 shadow-[0_-4px_24px_-8px_rgb(15_26_18/0.18)]">
-					<FundProgress goal={fund.goal} compact />
-					<FundActions shareUrl={shareUrl} footnote="Donations coming soon." />
+					<FundProgress {...progress} compact />
+					<FundActions {...actions} />
 				</div>
 			</div>
 		</div>

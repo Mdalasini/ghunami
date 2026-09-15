@@ -1,6 +1,7 @@
 import { httpRouter } from 'convex/server';
 import { internal } from './_generated/api';
 import { httpAction } from './_generated/server';
+import { callbackKeyFromPath, parseStkCallback } from './lib/mpesa';
 
 const http = httpRouter();
 
@@ -24,6 +25,37 @@ http.route({
 				'X-Content-Type-Options': 'nosniff'
 			}
 		});
+	})
+});
+
+http.route({
+	pathPrefix: '/mpesa/stk/',
+	method: 'POST',
+	handler: httpAction(async (ctx, request) => {
+		const callbackKey = callbackKeyFromPath(new URL(request.url).pathname);
+		if (!callbackKey) return new Response('Not found', { status: 404 });
+
+		let body: unknown;
+		try {
+			body = await request.json();
+		} catch {
+			return new Response('Bad request', { status: 400 });
+		}
+
+		const parsed = parseStkCallback(body);
+		if (!parsed) return new Response('Bad request', { status: 400 });
+
+		await ctx.runMutation(internal.donations.applyCallback, {
+			callbackKey,
+			merchantRequestId: parsed.merchantRequestId,
+			checkoutRequestId: parsed.checkoutRequestId,
+			resultCode: parsed.resultCode,
+			resultDesc: parsed.resultDesc,
+			amount: parsed.amount,
+			phone: parsed.phone,
+			receipt: parsed.receipt
+		});
+		return new Response(null, { status: 200 });
 	})
 });
 

@@ -1,12 +1,26 @@
 import { useState } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { CoverImage } from './CoverImage';
+import { DonateDialog } from './DonateDialog';
 import { HorizonDisc } from './HorizonMark';
 import { formatGoal } from '../lib/draft';
 import { shareOrCopyUrl } from '../lib/share';
 
-export function FundProgress({ goal, compact = false }: { goal: number; compact?: boolean }) {
-	const raised = 0;
-	const percent = Math.min(100, Math.round((raised / goal) * 100));
+export function FundProgress({
+	goal,
+	raised = 0,
+	donationCount = 0,
+	testPayments = false,
+	compact = false
+}: {
+	goal: number;
+	raised?: number;
+	donationCount?: number;
+	testPayments?: boolean;
+	compact?: boolean;
+}) {
+	const percent = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
 	return (
 		<div className="flex items-center gap-4">
 			<div
@@ -42,7 +56,12 @@ export function FundProgress({ goal, compact = false }: { goal: number; compact?
 					<strong className="font-extrabold">{formatGoal(raised)} raised</strong>{' '}
 					<span className="text-mute">of {formatGoal(goal)}</span>
 				</p>
-				<p className="mt-0.5 text-sm text-mute">Be the first to donate</p>
+				<p className="mt-0.5 text-sm text-mute">
+					{donationCount === 0
+						? 'Be the first to donate'
+						: `${donationCount} ${donationCount === 1 ? 'donation' : 'donations'}`}
+					{testPayments ? ' · test' : ''}
+				</p>
 			</div>
 		</div>
 	);
@@ -50,10 +69,14 @@ export function FundProgress({ goal, compact = false }: { goal: number; compact?
 
 export function FundActions({
 	shareUrl,
-	footnote
+	footnote,
+	donateEnabled = false,
+	onDonate
 }: {
 	shareUrl?: string;
 	footnote: string;
+	donateEnabled?: boolean;
+	onDonate?: () => void;
 }) {
 	const [feedback, setFeedback] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -76,7 +99,13 @@ export function FundActions({
 	return (
 		<>
 			<div className="mt-4 grid grid-cols-2 gap-3">
-				<button type="button" disabled className="btn-press w-full bg-accent px-4 text-card" aria-describedby="donate-soon">
+				<button
+					type="button"
+					disabled={!donateEnabled}
+					onClick={() => onDonate?.()}
+					className="btn-press w-full bg-accent px-4 text-card disabled:cursor-not-allowed"
+					aria-describedby="donate-soon"
+				>
 					Donate
 				</button>
 				<button
@@ -100,26 +129,48 @@ export function FundActions({
 	);
 }
 
-export function FundDonations({ className = 'mt-6 border-t border-line pt-6' }: { className?: string }) {
+export function FundDonations({
+	className = 'mt-6 border-t border-line pt-6',
+	count = 0,
+	donations = []
+}: {
+	className?: string;
+	count?: number;
+	donations?: Array<{ amount: number; createdAt: number; testPayment: boolean }>;
+}) {
 	return (
 		<section className={className} aria-labelledby="donations-heading">
 			<div className="flex items-center gap-2">
 				<h2 id="donations-heading" className="text-lg font-extrabold">
 					Donations
 				</h2>
-				<span className="rounded-md bg-paper px-2 py-0.5 text-xs font-bold text-mute">0</span>
+				<span className="rounded-md bg-paper px-2 py-0.5 text-xs font-bold text-mute">{count}</span>
 			</div>
-			<div className="mt-4 flex items-center gap-3">
-				<span
-					className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sun text-xl text-accent"
-					aria-hidden="true"
-				>
-					♡
-				</span>
-				<p className="text-sm leading-relaxed text-mute">
-					No donations yet. The first act of kindness will show up here.
-				</p>
-			</div>
+			{donations.length === 0 ? (
+				<div className="mt-4 flex items-center gap-3">
+					<span
+						className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sun text-xl text-accent"
+						aria-hidden="true"
+					>
+						♡
+					</span>
+					<p className="text-sm leading-relaxed text-mute">
+						No donations yet. The first act of kindness will show up here.
+					</p>
+				</div>
+			) : (
+				<ul className="mt-4 space-y-3">
+					{donations.map((donation) => (
+						<li key={`${donation.createdAt}-${donation.amount}`} className="flex items-center justify-between gap-3">
+							<p className="text-sm font-bold">
+								A donor
+								{donation.testPayment ? <span className="ml-2 text-xs font-bold text-mute">test</span> : null}
+							</p>
+							<p className="text-sm font-extrabold">{formatGoal(donation.amount)}</p>
+						</li>
+					))}
+				</ul>
+			)}
 		</section>
 	);
 }
@@ -171,4 +222,24 @@ export function FundStory({ html }: { html: string }) {
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);
+}
+
+export function useFundSupport(fundID: string | null) {
+	const [donateOpen, setDonateOpen] = useState(false);
+	const config = useQuery(api.donations.publicConfig);
+	const summary = useQuery(api.donations.fundSummary, fundID ? { fundID } : 'skip');
+	const list = useQuery(api.donations.listDonations, fundID
+		? { fundID, paginationOpts: { numItems: 20, cursor: null } }
+		: 'skip');
+	return {
+		raised: summary?.raised ?? 0,
+		donationCount: summary?.donationCount ?? 0,
+		testPayments: summary?.testPayments ?? false,
+		donations: list?.page ?? [],
+		donateEnabled: Boolean(config?.donateEnabled),
+		donateOpen,
+		openDonate: () => setDonateOpen(true),
+		donateDialog:
+			donateOpen && fundID ? <DonateDialog fundID={fundID} onClose={() => setDonateOpen(false)} /> : null
+	};
 }
