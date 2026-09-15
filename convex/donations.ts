@@ -26,7 +26,6 @@ import {
 	amountsMatch,
 	buildStkPushBody,
 	mpesaConfigOrNull,
-	oauthBasic,
 	parseCallbackKey,
 	parseDonateAmount,
 	parseDonateIdempotencyKey,
@@ -35,6 +34,8 @@ import {
 	parseResultCode,
 	parseStatusKey,
 	randomHex,
+	requestOAuthToken,
+	stkCollectionEnabled,
 	normalizeKenyanMsisdn,
 	type AttemptStatus,
 	type MpesaConfig
@@ -54,7 +55,8 @@ const publicStatus = v.object({
 	status: statusValidator,
 	amount: v.number(),
 	currency: v.literal('KES'),
-	environment: environmentValidator
+	environment: environmentValidator,
+	reversed: v.boolean()
 });
 
 const donationItem = v.object({
@@ -97,7 +99,8 @@ function publicAttempt(attempt: Doc<'donationAttempts'>) {
 		status: attempt.status,
 		amount: attempt.amount,
 		currency: 'KES' as const,
-		environment: attempt.environment
+		environment: attempt.environment,
+		reversed: attempt.reversed === true
 	};
 }
 
@@ -114,6 +117,16 @@ export const publicConfig = query({
 	handler: async () => {
 		try {
 			parseMpesaConfig();
+			if (!stkCollectionEnabled()) {
+				return {
+					donateEnabled: false,
+					environment: 'sandbox' as const,
+					minAmount: MPESA_MIN_AMOUNT,
+					maxAmount: MPESA_MAX_AMOUNT,
+					presets: [...DONATE_PRESETS],
+					reason: 'Donation prompts are paused.'
+				};
+			}
 			return {
 				donateEnabled: true,
 				environment: 'sandbox' as const,
@@ -131,7 +144,7 @@ export const publicConfig = query({
 				minAmount: MPESA_MIN_AMOUNT,
 				maxAmount: MPESA_MAX_AMOUNT,
 				presets: [...DONATE_PRESETS],
-				reason: blocked ? 'Donations aren’t available yet.' : 'Donations aren’t available yet.'
+				reason: 'Donations aren’t available yet.'
 			};
 		}
 	}
@@ -185,12 +198,14 @@ export const listDonations = query({
 			.order('desc')
 			.paginate(args.paginationOpts);
 		return {
-			page: result.page.map((row) => ({
-				amount: row.amount,
-				createdAt: row.createdAt,
-				environment: row.environment,
-				testPayment: row.environment === 'sandbox'
-			})),
+			page: result.page
+				.filter((row) => row.reversed !== true)
+				.map((row) => ({
+					amount: row.amount,
+					createdAt: row.createdAt,
+					environment: row.environment,
+					testPayment: row.environment === 'sandbox'
+				})),
 			isDone: result.isDone,
 			continueCursor: result.continueCursor
 		};
@@ -259,7 +274,8 @@ export const beginAttempt = internalMutation({
 		phone: v.string(),
 		guestSessionId: v.string(),
 		idempotencyKey: v.string(),
-		environment: environmentValidator
+		environment: environmentValidator,
+		merchantShortcode: v.string()
 	},
 	returns: v.object({
 		attemptId: v.id('donationAttempts'),
@@ -321,7 +337,9 @@ export const beginAttempt = internalMutation({
 			statusKey,
 			callbackKey,
 			createdAt: now,
-			updatedAt: now
+			updatedAt: now,
+			merchantShortcode: args.merchantShortcode,
+			reversed: false
 		});
 		return { attemptId, statusKey, callbackKey, status: 'pending' as const, replay: false };
 	}
@@ -455,6 +473,10 @@ export const applyCallback = internalMutation({
 			.unique();
 		if (!attempt) return { applied: false, status: null };
 
+		if (attempt.reversed) {
+			return { applied: true, status: attempt.status };
+		}
+
 		if (attempt.status === 'succeeded') {
 			return { applied: true, status: attempt.status };
 		}
@@ -485,6 +507,9 @@ export const applyCallback = internalMutation({
 					updatedAt: now
 				});
 				return { applied: true, status: 'failed' };
+			}
+			if (attempt.reversed) {
+				return { applied: true, status: attempt.status };
 			}
 			if (!attempt.credited) {
 				await creditFund(ctx, attempt);
@@ -552,6 +577,9 @@ export const initiate = action({
 		environment: 'sandbox' | 'production';
 	}> => {
 		const config = parseMpesaConfig();
+		if (!stkCollectionEnabled()) {
+			throw new Error('Donation prompts are paused.');
+		}
 		const amount = parseDonateAmount(args.amount);
 		const phone = normalizeKenyanMsisdn(args.phone);
 		parseGuestSessionId(args.guestSessionId);
@@ -563,7 +591,8 @@ export const initiate = action({
 			phone,
 			guestSessionId: args.guestSessionId,
 			idempotencyKey: args.idempotencyKey,
-			environment: config.environment
+			environment: config.environment,
+			merchantShortcode: config.shortcode
 		});
 
 		if (started.replay) {
@@ -676,25 +705,11 @@ async function oauthToken(ctx: { runQuery: ActionCtx['runQuery']; runMutation: A
 		now: Date.now()
 	});
 	if (cached) return cached;
-	const response = await fetch(`${config.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
-		headers: { Authorization: `Basic ${oauthBasic(config.consumerKey, config.consumerSecret)}` },
-		signal: AbortSignal.timeout(15_000)
-	});
-	if (!response.ok) throw new Error('Couldn’t start the M-PESA prompt. Try again.');
-	const payload: unknown = await response.json().catch(() => null);
-	const accessToken =
-		payload && typeof payload === 'object' && typeof (payload as { access_token?: unknown }).access_token === 'string'
-			? (payload as { access_token: string }).access_token
-			: '';
-	const expiresIn = parseResultCode(
-		payload && typeof payload === 'object' ? (payload as { expires_in?: unknown }).expires_in : null
-	);
-	if (!accessToken) throw new Error('Couldn’t start the M-PESA prompt. Try again.');
-	const ttl = (expiresIn && expiresIn > 0 ? expiresIn : 3599) * 1000;
+	const token = await requestOAuthToken(config);
 	await ctx.runMutation(internal.donations.storeToken, {
 		environment: config.environment,
-		accessToken,
-		expiresAt: Date.now() + ttl
+		accessToken: token.accessToken,
+		expiresAt: token.expiresAt
 	});
-	return accessToken;
+	return token.accessToken;
 }

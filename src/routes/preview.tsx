@@ -149,8 +149,8 @@ export default function FundPreview() {
 	const footnote = !live
 		? 'Sharing opens when you set this fund live. Donations aren’t available yet.'
 		: donateEnabled
-			? 'Test payments via M-PESA sandbox. Donations collect to Ghunami’s PayBill.'
-			: 'Donations aren’t available yet.';
+			? 'Test payments via M-PESA sandbox. Donations collect to Ghunami’s PayBill. Sandbox does not guarantee that no money moved.'
+			: support.donateReason;
 
 	return (
 		<AuthGate>

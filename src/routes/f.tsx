@@ -84,8 +84,8 @@ export default function PublicFundPage() {
 	const shareUrl = `${origin}${fundPath(fund.fundID, fund.title)}`;
 	const donateEnabled = support.donateEnabled;
 	const footnote = donateEnabled
-		? 'Test payments via M-PESA sandbox. Donations collect to Ghunami’s PayBill.'
-		: 'Donations aren’t available yet.';
+		? 'Test payments via M-PESA sandbox. Donations collect to Ghunami’s PayBill. Sandbox does not guarantee that no money moved.'
+		: support.donateReason;
 	const progress = {
 		goal: fund.goal,
 		raised: support.raised,

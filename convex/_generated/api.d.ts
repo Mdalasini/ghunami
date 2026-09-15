@@ -16,7 +16,9 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_fundFields from "../lib/fundFields.js";
 import type * as lib_fundId from "../lib/fundId.js";
 import type * as lib_mpesa from "../lib/mpesa.js";
+import type * as lib_operators from "../lib/operators.js";
 import type * as lib_richText from "../lib/richText.js";
+import type * as reversals from "../reversals.js";
 import type * as users from "../users.js";
 
 import type {
@@ -34,7 +36,9 @@ declare const fullApi: ApiFromModules<{
   "lib/fundFields": typeof lib_fundFields;
   "lib/fundId": typeof lib_fundId;
   "lib/mpesa": typeof lib_mpesa;
+  "lib/operators": typeof lib_operators;
   "lib/richText": typeof lib_richText;
+  reversals: typeof reversals;
   users: typeof users;
 }>;
 

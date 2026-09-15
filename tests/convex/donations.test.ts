@@ -35,6 +35,7 @@ const envNames = [
 	'MPESA_SHORTCODE',
 	'MPESA_PASSKEY',
 	'MPESA_TRANSACTION_TYPE',
+	'MPESA_STK_ENABLED',
 	'CONVEX_SITE_URL'
 ] as const;
 
@@ -47,6 +48,7 @@ function setSandboxEnv() {
 	process.env.MPESA_SHORTCODE = '174379';
 	process.env.MPESA_PASSKEY = 'test-passkey';
 	process.env.MPESA_TRANSACTION_TYPE = 'CustomerPayBillOnline';
+	process.env.MPESA_STK_ENABLED = 'true';
 	process.env.CONVEX_SITE_URL = 'https://test.convex.site';
 }
 
@@ -312,7 +314,8 @@ describe('sandbox donations', () => {
 			phone,
 			guestSessionId: guest,
 			idempotencyKey: 'donate-7-aaaaaaaa',
-			environment: 'sandbox'
+			environment: 'sandbox',
+			merchantShortcode: '174379'
 		});
 		expect(started.status).toBe('pending');
 		const row = await attemptRow(t);
@@ -410,5 +413,26 @@ describe('sandbox donations', () => {
 		expect((await t.fetch('/mpesa/stk/aa'.concat('bb'.repeat(15)), { method: 'POST', body: 'not-json' })).status).toBe(
 			400
 		);
+	});
+
+	it('pauses new STK prompts when the collection kill switch is off', async () => {
+		delete process.env.MPESA_STK_ENABLED;
+		const t = harness();
+		const { fundID } = await liveFund(t);
+		mockDaraja();
+		expect(await t.query(api.donations.publicConfig, {})).toMatchObject({
+			donateEnabled: false,
+			reason: 'Donation prompts are paused.'
+		});
+		await expect(
+			t.action(api.donations.initiate, {
+				fundID,
+				amount: 100,
+				phone,
+				guestSessionId: guest,
+				idempotencyKey: 'donate-11-aaaaaaa'
+			})
+		).rejects.toThrow(/paused/);
+		expect(await t.run(async (ctx) => ctx.db.query('donationAttempts').first())).toBeNull();
 	});
 });

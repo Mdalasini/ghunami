@@ -237,6 +237,7 @@ export function useFundSupport(fundID: string | null) {
 		testPayments: summary?.testPayments ?? false,
 		donations: list?.page ?? [],
 		donateEnabled: Boolean(config?.donateEnabled),
+		donateReason: config?.reason ?? 'Donations aren’t available yet.',
 		donateOpen,
 		openDonate: () => setDonateOpen(true),
 		donateDialog:

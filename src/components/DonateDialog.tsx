@@ -87,9 +87,13 @@ export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () 
 			onOpen={(panel) => (panel.querySelector('button, input') as HTMLElement | null)?.focus()}
 		>
 			<p className="mt-2 rounded-xl bg-sun/80 px-3 py-2 text-xs font-bold text-mute">
-				Test payment · M-PESA sandbox. No real money is collected.
+				Test payment · M-PESA sandbox. A sandbox label does not guarantee that no money moved.
 			</p>
-			{status === 'form' ? (
+			{config && !config.donateEnabled ? (
+				<p className="mt-4 text-sm font-bold text-mute" role="status">
+					{config.reason ?? 'Donation prompts are paused.'}
+				</p>
+			) : status === 'form' ? (
 				<form className="mt-5" onSubmit={(event) => void submit(event)}>
 					<fieldset className="min-w-0">
 						<legend className="text-sm font-bold">Amount</legend>
@@ -169,7 +173,9 @@ export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () 
 			) : (
 				<div className="mt-5">
 					<p className="text-sm leading-relaxed text-mute" role="status" aria-live="polite">
-						{copy.body}
+						{remote?.reversed
+							? 'This payment was reversed. Raised totals no longer include it.'
+							: copy.body}
 					</p>
 					{remote ? (
 						<p className="mt-3 text-lg font-extrabold">{formatGoal(remote.amount)}</p>

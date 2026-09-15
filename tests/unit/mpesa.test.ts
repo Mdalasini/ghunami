@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
 	accountReference,
 	buildStkPushBody,
+	buildReversalBody,
 	callbackKeyFromPath,
+	parseReversalConfig,
+	parseReversalResult,
+	reversalKeyFromPath,
+	stkCollectionEnabled,
 	donateStatusCopy,
 	mpesaTimestamp,
 	normalizeKenyanMsisdn,
@@ -22,6 +27,12 @@ const env = {
 	MPESA_PASSKEY: 'passkey',
 	MPESA_TRANSACTION_TYPE: 'CustomerPayBillOnline',
 	CONVEX_SITE_URL: 'https://test.convex.site'
+};
+
+const reversalEnv = {
+	...env,
+	MPESA_REVERSAL_INITIATOR: 'apiop37',
+	MPESA_REVERSAL_SECURITY_CREDENTIAL: 'encrypted-credential'
 };
 
 describe('M-PESA validation', () => {
@@ -109,6 +120,42 @@ describe('M-PESA validation', () => {
 		expect(ok).toMatchObject({ resultCode: 0, amount: 100, phone: '254712345678', receipt: 'NLJ7RT61SV' });
 		expect(callbackKeyFromPath(`/mpesa/stk/${'ab'.repeat(16)}`)).toBe('ab'.repeat(16));
 		expect(callbackKeyFromPath('/mpesa/stk/nope')).toBe('');
+	});
+
+	it('builds a reversal payload with the documented RecieverIdentifierType spelling', () => {
+		expect(stkCollectionEnabled({})).toBe(false);
+		expect(stkCollectionEnabled({ MPESA_STK_ENABLED: 'true' })).toBe(true);
+		expect(() => parseReversalConfig(env)).toThrow(/MPESA_REVERSAL_INITIATOR/);
+		expect(() => parseReversalConfig({ ...reversalEnv, MPESA_ENVIRONMENT: 'production' })).toThrow(/blocked/);
+		const body = buildReversalBody({
+			config: parseReversalConfig(reversalEnv),
+			receipt: 'NLJ7RT61SV',
+			amount: 100,
+			shortcode: '174379',
+			callbackKey: 'aa'.repeat(16),
+			timeoutKey: 'bb'.repeat(16),
+			remarks: 'wrong prompt'
+		});
+		expect(body).toMatchObject({
+			CommandID: 'TransactionReversal',
+			TransactionID: 'NLJ7RT61SV',
+			Amount: 100,
+			ReceiverParty: '174379',
+			RecieverIdentifierType: '11',
+			Remarks: 'wrong prompt'
+		});
+		expect(Object.keys(body)).toContain('RecieverIdentifierType');
+		expect(reversalKeyFromPath(`/mpesa/reversal/result/${'aa'.repeat(16)}`, 'result')).toBe('aa'.repeat(16));
+		expect(parseReversalResult({ Result: { ResultCode: 'R000002' } })).toBeNull();
+		const parsed = parseReversalResult({
+			Result: {
+				ResultCode: 'R000001',
+				OriginatorConversationID: 'o',
+				ConversationID: 'c',
+				TransactionID: 'SKE0000000'
+			}
+		});
+		expect(parsed).toMatchObject({ resultCode: 'R000001', reversalReceipt: 'SKE0000000' });
 	});
 });
 

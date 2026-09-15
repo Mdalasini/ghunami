@@ -73,6 +73,9 @@ export default defineSchema({
 		merchantRequestId: v.optional(v.string()),
 		checkoutRequestId: v.optional(v.string()),
 		receipt: v.optional(v.string()),
+		merchantShortcode: v.optional(v.string()),
+		reversed: v.optional(v.boolean()),
+		activeReversalId: v.optional(v.id('reversalAttempts')),
 		resultCode: v.optional(v.number()),
 		resultDesc: v.optional(v.string()),
 		createdAt: v.number(),
@@ -85,6 +88,45 @@ export default defineSchema({
 		.index('by_phone_created', ['phone', 'createdAt'])
 		.index('by_guest_created', ['guestSessionId', 'createdAt'])
 		.index('by_fund_env_status_created', ['fundDocId', 'environment', 'status', 'createdAt']),
+
+	reversalAttempts: defineTable({
+		donationAttemptId: v.id('donationAttempts'),
+		originalReceipt: v.string(),
+		amount: v.number(),
+		currency: v.literal('KES'),
+		environment: v.union(v.literal('sandbox'), v.literal('production')),
+		merchantShortcode: v.string(),
+		operatorUserId: v.id('users'),
+		operatorTokenIdentifier: v.string(),
+		reason: v.string(),
+		idempotencyKey: v.string(),
+		callbackKey: v.string(),
+		timeoutKey: v.string(),
+		status: v.union(
+			v.literal('pending'),
+			v.literal('accepted'),
+			v.literal('unknown'),
+			v.literal('succeeded'),
+			v.literal('failed')
+		),
+		accountingApplied: v.boolean(),
+		reviewRequired: v.optional(v.boolean()),
+		metadataMismatch: v.optional(v.boolean()),
+		originatorConversationId: v.optional(v.string()),
+		conversationId: v.optional(v.string()),
+		reversalReceipt: v.optional(v.string()),
+		resultCode: v.optional(v.string()),
+		resultDesc: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number()
+	})
+		.index('by_idempotencyKey', ['idempotencyKey'])
+		.index('by_callbackKey', ['callbackKey'])
+		.index('by_timeoutKey', ['timeoutKey'])
+		.index('by_donationAttemptId', ['donationAttemptId'])
+		.index('by_originatorConversationId', ['originatorConversationId'])
+		.index('by_conversationId', ['conversationId'])
+		.index('by_operator_created', ['operatorUserId', 'createdAt']),
 
 	mpesaOAuth: defineTable({
 		environment: v.string(),

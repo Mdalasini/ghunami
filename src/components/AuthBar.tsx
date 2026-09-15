@@ -14,6 +14,7 @@ function canHover() {
 export function AuthBar() {
 	const { isLoading, isAuthenticated } = useConvexAuth();
 	const me = useQuery(api.users.me, isAuthenticated ? {} : 'skip');
+	const operator = useQuery(api.reversals.access, isAuthenticated ? {} : 'skip');
 	const signOut = useFetcher();
 	const location = useLocation();
 	const root = useRef<HTMLDivElement>(null);
@@ -93,6 +94,15 @@ export function AuthBar() {
 						>
 							My funds
 						</Link>
+						{operator?.operator ? (
+							<Link
+								to="/ops/reversals"
+								role="menuitem"
+								className="font-ui block w-full whitespace-nowrap rounded-full px-5 py-2.5 text-xs font-extrabold tracking-wider text-mute uppercase hover:bg-paper hover:text-ink"
+							>
+								Reversals
+							</Link>
+						) : null}
 						<signOut.Form method="post" action="/auth/signout">
 							<button
 								type="submit"
