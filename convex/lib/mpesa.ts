@@ -35,6 +35,8 @@ export type MpesaConfig = {
 export type ReversalConfig = MpesaConfig & {
 	initiator: string;
 	securityCredential: string;
+	/** Org shortcode debiting the reversal. Sandbox STK till 174379 is not this. */
+	reversalShortcode: string;
 };
 
 const DARAJA_INGRESS_IPS = [
@@ -111,7 +113,16 @@ export function parseReversalConfig(
 			'Reversals aren’t configured. Set MPESA_REVERSAL_INITIATOR and MPESA_REVERSAL_SECURITY_CREDENTIAL on this Convex deployment. Collection keys and the STK passkey cannot submit reversals. Enable the Daraja Reversal product and the Org Reversals Initiator API role, then store an environment-specific encrypted SecurityCredential. Ghunami does not generate that credential.'
 		);
 	}
-	return { ...config, initiator, securityCredential };
+	const reversalShortcode = env.MPESA_REVERSAL_SHORTCODE?.trim();
+	if (!reversalShortcode) {
+		throw new Error(
+			'Reversals aren’t configured. Set MPESA_REVERSAL_SHORTCODE to the organisation shortcode on Daraja Reversal test credentials (usually 600xxx). That is ReceiverParty. Do not use Lipa Na M-Pesa 174379 — M-PESA returns OriginalTransactionID invalid for that till.'
+		);
+	}
+	if (!/^\d{5,7}$/.test(reversalShortcode)) {
+		throw new Error('MPESA_REVERSAL_SHORTCODE is invalid.');
+	}
+	return { ...config, initiator, securityCredential, reversalShortcode };
 }
 
 export function mpesaConfigOrNull(env: Record<string, string | undefined> = process.env): MpesaConfig | null {
@@ -408,7 +419,6 @@ export function buildReversalBody(args: {
 	config: ReversalConfig;
 	receipt: string;
 	amount: number;
-	shortcode: string;
 	callbackKey: string;
 	timeoutKey: string;
 	remarks: string;
@@ -420,7 +430,7 @@ export function buildReversalBody(args: {
 		CommandID: 'TransactionReversal',
 		TransactionID: args.receipt,
 		Amount: args.amount,
-		ReceiverParty: args.shortcode,
+		ReceiverParty: args.config.reversalShortcode,
 		RecieverIdentifierType: '11',
 		ResultURL: reversalResultUrl(args.config.siteUrl, args.callbackKey),
 		QueueTimeOutURL: reversalTimeoutUrl(args.config.siteUrl, args.timeoutKey),

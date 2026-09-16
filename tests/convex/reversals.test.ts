@@ -47,6 +47,7 @@ const envNames = [
 	'MPESA_STK_ENABLED',
 	'MPESA_REVERSAL_INITIATOR',
 	'MPESA_REVERSAL_SECURITY_CREDENTIAL',
+	'MPESA_REVERSAL_SHORTCODE',
 	'GHUNAMI_OPERATOR_TOKEN_IDENTIFIERS',
 	'CONVEX_SITE_URL'
 ] as const;
@@ -63,6 +64,7 @@ function setSandboxEnv() {
 	process.env.MPESA_STK_ENABLED = 'true';
 	process.env.MPESA_REVERSAL_INITIATOR = 'apiop37';
 	process.env.MPESA_REVERSAL_SECURITY_CREDENTIAL = 'test-reversal-credential';
+	process.env.MPESA_REVERSAL_SHORTCODE = '600984';
 	process.env.GHUNAMI_OPERATOR_TOKEN_IDENTIFIERS = operatorToken;
 	process.env.CONVEX_SITE_URL = 'https://test.convex.site';
 }
@@ -253,7 +255,8 @@ describe('sandbox reversals', () => {
 		expect(body.TransactionID).toBe('NLJ7RT61SV');
 		expect(body.TransactionID).not.toBe(row.checkoutRequestId);
 		expect(body.Amount).toBe(100);
-		expect(body.ReceiverParty).toBe('174379');
+		expect(body.ReceiverParty).toBe('600984');
+		expect(body.ReceiverParty).not.toBe('174379');
 		expect(body.RecieverIdentifierType).toBe('11');
 		expect(body.Initiator).toBe('apiop37');
 		expect(body.Remarks).toBe('wrong prompt');

@@ -74,7 +74,8 @@ export default function OperatorReversals() {
 							<p className="mt-4 text-sm leading-relaxed text-mute">
 								Full reversals of confirmed sandbox collections only. An accepted request is not a completed
 								refund. Unknown results need manual review — do not resubmit. A sandbox reversal cannot refund a
-								production debit.
+								production debit. Sandbox Express uses till 174379; reversals debit the organisation shortcode
+								from Daraja Reversal test credentials, not that till.
 							</p>
 							<ul className="mt-8 space-y-3">
 								{(list?.page ?? []).map((row) => (

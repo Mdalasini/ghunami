@@ -559,7 +559,6 @@ export const initiate = action({
 				config,
 				receipt: started.receipt,
 				amount: started.amount,
-				shortcode: started.shortcode,
 				callbackKey: started.callbackKey,
 				timeoutKey: started.timeoutKey,
 				remarks: args.reason

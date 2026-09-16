@@ -24,6 +24,7 @@ Set on the Convex deployment (`npx convex env set …`). Never `VITE_*`.
 | --- | --- |
 | `MPESA_REVERSAL_INITIATOR` | API operator username (Org portal, access channel API) |
 | `MPESA_REVERSAL_SECURITY_CREDENTIAL` | SecurityCredential generated on the Daraja site for **this** environment (not the initiator password or STK passkey) |
+| `MPESA_REVERSAL_SHORTCODE` | Organisation shortcode for `ReceiverParty` (Daraja Reversal test credentials, usually `600xxx`). Not Lipa Na M-Pesa `174379`. |
 | `GHUNAMI_OPERATOR_TOKEN_IDENTIFIERS` | Comma-separated Convex `tokenIdentifier` values (`issuer\|subject`). Empty deny-by-default |
 
 Collection `MPESA_CONSUMER_KEY` / `SECRET` are reused only for OAuth. They do **not** grant reversal permission. Enable the **Reversal** product on the Daraja app and assign the **Org Reversals Initiator** API role.
@@ -53,6 +54,7 @@ Legacy donations without `merchantShortcode` need manual review. Ghunami will no
 - Confirmed STK success with a stored original receipt (`TransactionID`), not `CheckoutRequestID`
 - Full amount only
 - Same environment and receiving shortcode as the original attempt
+- Reversal `ReceiverParty` is `MPESA_REVERSAL_SHORTCODE` (org), not the Express till
 - Not already reversed; no open non-failed reversal
 
 ## Callbacks and unknown results

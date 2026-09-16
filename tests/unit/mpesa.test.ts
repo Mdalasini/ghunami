@@ -32,7 +32,8 @@ const env = {
 const reversalEnv = {
 	...env,
 	MPESA_REVERSAL_INITIATOR: 'apiop37',
-	MPESA_REVERSAL_SECURITY_CREDENTIAL: 'encrypted-credential'
+	MPESA_REVERSAL_SECURITY_CREDENTIAL: 'encrypted-credential',
+	MPESA_REVERSAL_SHORTCODE: '600984'
 };
 
 describe('M-PESA validation', () => {
@@ -127,11 +128,16 @@ describe('M-PESA validation', () => {
 		expect(stkCollectionEnabled({ MPESA_STK_ENABLED: 'true' })).toBe(true);
 		expect(() => parseReversalConfig(env)).toThrow(/MPESA_REVERSAL_INITIATOR/);
 		expect(() => parseReversalConfig({ ...reversalEnv, MPESA_ENVIRONMENT: 'production' })).toThrow(/blocked/);
+		expect(() =>
+			parseReversalConfig({
+				...reversalEnv,
+				MPESA_REVERSAL_SHORTCODE: undefined
+			})
+		).toThrow(/MPESA_REVERSAL_SHORTCODE/);
 		const body = buildReversalBody({
 			config: parseReversalConfig(reversalEnv),
 			receipt: 'NLJ7RT61SV',
 			amount: 100,
-			shortcode: '174379',
 			callbackKey: 'aa'.repeat(16),
 			timeoutKey: 'bb'.repeat(16),
 			remarks: 'wrong prompt'
@@ -140,7 +146,7 @@ describe('M-PESA validation', () => {
 			CommandID: 'TransactionReversal',
 			TransactionID: 'NLJ7RT61SV',
 			Amount: 100,
-			ReceiverParty: '174379',
+			ReceiverParty: '600984',
 			RecieverIdentifierType: '11',
 			Remarks: 'wrong prompt'
 		});
