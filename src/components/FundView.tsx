@@ -136,7 +136,7 @@ export function FundDonations({
 }: {
 	className?: string;
 	count?: number;
-	donations?: Array<{ amount: number; createdAt: number; testPayment: boolean }>;
+	donations?: Array<{ amount: number; createdAt: number; displayName: string | null; testPayment: boolean }>;
 }) {
 	return (
 		<section className={className} aria-labelledby="donations-heading">
