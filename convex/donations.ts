@@ -29,6 +29,7 @@ import {
 	oauthBasic,
 	parseCallbackKey,
 	parseDonateAmount,
+	parseDonateDisplayName,
 	parseDonateIdempotencyKey,
 	parseGuestSessionId,
 	parseMpesaConfig,
@@ -60,6 +61,7 @@ const publicStatus = v.object({
 const donationItem = v.object({
 	amount: v.number(),
 	createdAt: v.number(),
+	displayName: v.union(v.string(), v.null()),
 	environment: environmentValidator,
 	testPayment: v.boolean()
 });
@@ -188,6 +190,7 @@ export const listDonations = query({
 			page: result.page.map((row) => ({
 				amount: row.amount,
 				createdAt: row.createdAt,
+				displayName: row.displayName ?? null,
 				environment: row.environment,
 				testPayment: row.environment === 'sandbox'
 			})),
@@ -259,7 +262,8 @@ export const beginAttempt = internalMutation({
 		phone: v.string(),
 		guestSessionId: v.string(),
 		idempotencyKey: v.string(),
-		environment: environmentValidator
+		environment: environmentValidator,
+		displayName: v.optional(v.string())
 	},
 	returns: v.object({
 		attemptId: v.id('donationAttempts'),
@@ -273,6 +277,7 @@ export const beginAttempt = internalMutation({
 		const phone = normalizeKenyanMsisdn(args.phone);
 		const guestSessionId = parseGuestSessionId(args.guestSessionId);
 		const idempotencyKey = parseDonateIdempotencyKey(args.idempotencyKey);
+		const displayName = parseDonateDisplayName(args.displayName);
 		const fund = await fundByPublicId(ctx, args.fundID);
 		if (!fund || fund.status !== 'live') {
 			throw new Error('This fund isn’t accepting donations.');
@@ -287,7 +292,8 @@ export const beginAttempt = internalMutation({
 				existing.fundDocId !== fund._id ||
 				existing.amount !== amount ||
 				existing.phone !== phone ||
-				existing.environment !== args.environment
+				existing.environment !== args.environment ||
+				(existing.displayName ?? undefined) !== displayName
 			) {
 				throw new Error('Invalid request. Try again.');
 			}
@@ -315,6 +321,7 @@ export const beginAttempt = internalMutation({
 			phone,
 			guestSessionId,
 			userId: user?._id,
+			...(displayName ? { displayName } : {}),
 			status: 'pending',
 			credited: false,
 			idempotencyKey,
@@ -542,7 +549,8 @@ export const initiate = action({
 		amount: v.number(),
 		phone: v.string(),
 		guestSessionId: v.string(),
-		idempotencyKey: v.string()
+		idempotencyKey: v.string(),
+		displayName: v.optional(v.string())
 	},
 	returns: initiateReturn,
 	handler: async (ctx, args): Promise<{
@@ -556,6 +564,7 @@ export const initiate = action({
 		const phone = normalizeKenyanMsisdn(args.phone);
 		parseGuestSessionId(args.guestSessionId);
 		parseDonateIdempotencyKey(args.idempotencyKey);
+		const displayName = parseDonateDisplayName(args.displayName);
 
 		const started = await ctx.runMutation(internal.donations.beginAttempt, {
 			fundID: args.fundID,
@@ -563,7 +572,8 @@ export const initiate = action({
 			phone,
 			guestSessionId: args.guestSessionId,
 			idempotencyKey: args.idempotencyKey,
-			environment: config.environment
+			environment: config.environment,
+			...(displayName ? { displayName } : {})
 		});
 
 		if (started.replay) {

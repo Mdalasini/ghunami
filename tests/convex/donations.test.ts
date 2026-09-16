@@ -238,7 +238,7 @@ describe('sandbox donations', () => {
 			paginationOpts: { numItems: 10, cursor: null }
 		});
 		expect(list.page).toEqual([
-			expect.objectContaining({ amount: 100, testPayment: true })
+			expect.objectContaining({ amount: 100, testPayment: true, displayName: null })
 		]);
 		expect(JSON.stringify(list)).not.toMatch(/254712345678|callbackKey|statusKey/);
 	});
@@ -410,5 +410,56 @@ describe('sandbox donations', () => {
 		expect((await t.fetch('/mpesa/stk/aa'.concat('bb'.repeat(15)), { method: 'POST', body: 'not-json' })).status).toBe(
 			400
 		);
+	});
+
+	it('stores a display name for the public list and treats blank as anonymous', async () => {
+		const t = harness();
+		const { fundID } = await liveFund(t);
+		mockDaraja();
+		await t.action(api.donations.initiate, {
+			fundID,
+			amount: 100,
+			phone,
+			guestSessionId: guest,
+			idempotencyKey: 'donate-11-aaaaaaa',
+			displayName: '  Ada  Lovelace  '
+		});
+		const named = await attemptRow(t);
+		expect(named?.displayName).toBe('Ada Lovelace');
+		await t.fetch(`/mpesa/stk/${named!.callbackKey}`, { method: 'POST', body: JSON.stringify(successBody()) });
+
+		await t.action(api.donations.initiate, {
+			fundID,
+			amount: 200,
+			phone: '254722000000',
+			guestSessionId: 'cd'.repeat(16),
+			idempotencyKey: 'donate-12-aaaaaaa',
+			displayName: '   '
+		});
+		const rows = await t.run(async (ctx) => ctx.db.query('donationAttempts').collect());
+		const anon = rows.find((row) => row.amount === 200);
+		await t.fetch(`/mpesa/stk/${anon!.callbackKey}`, {
+			method: 'POST',
+			body: JSON.stringify(
+				successBody({
+					CallbackMetadata: {
+						Item: [
+							{ Name: 'Amount', Value: 200.0 },
+							{ Name: 'MpesaReceiptNumber', Value: 'NLJ7RT61SW' },
+							{ Name: 'PhoneNumber', Value: 254722000000 }
+						]
+					}
+				} as never)
+			)
+		});
+
+		const list = await t.query(api.donations.listDonations, {
+			fundID,
+			paginationOpts: { numItems: 10, cursor: null }
+		});
+		expect(list.page).toEqual([
+			expect.objectContaining({ displayName: null, amount: 200 }),
+			expect.objectContaining({ displayName: 'Ada Lovelace', amount: 100 })
+		]);
 	});
 });

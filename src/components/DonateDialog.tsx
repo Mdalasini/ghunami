@@ -1,4 +1,4 @@
-import { useAction, useQuery } from 'convex/react';
+import { useAction, useConvexAuth, useQuery } from 'convex/react';
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../convex/_generated/api';
 import { normalizeKenyanMsisdn } from '../../convex/lib/mpesa';
@@ -15,11 +15,15 @@ import { Modal } from './Modal';
 export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () => void }) {
 	const titleId = useId();
 	const initiate = useAction(api.donations.initiate);
+	const { isAuthenticated } = useConvexAuth();
+	const me = useQuery(api.users.me, isAuthenticated ? {} : 'skip');
 	const config = useQuery(api.donations.publicConfig);
 	const pendingRef = useRef(false);
 	const [preset, setPreset] = useState<number | 'custom'>(500);
 	const [customText, setCustomText] = useState('');
 	const [customAmount, setCustomAmount] = useState<number | null>(null);
+	const [nameDraft, setNameDraft] = useState<string | undefined>();
+	const [anonymous, setAnonymous] = useState(false);
 	const [phone, setPhone] = useState('');
 	const [error, setError] = useState('');
 	const [pending, setPending] = useState(false);
@@ -29,6 +33,7 @@ export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () 
 	const remote = useQuery(api.donations.getStatus, statusKey ? { statusKey } : 'skip');
 	const status = remote?.status ?? localStatus;
 	const amount = selectedDonateAmount(preset, customAmount);
+	const name = nameDraft ?? me?.name ?? '';
 	const amountError = donateAmountError(amount);
 	const copy = donateStatusCopy(status === 'form' ? 'form' : status);
 	const waiting = status === 'pending' || status === 'accepted';
@@ -59,7 +64,8 @@ export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () 
 				amount,
 				phone: msisdn,
 				guestSessionId: guestDonateSession(),
-				idempotencyKey: crypto.randomUUID()
+				idempotencyKey: crypto.randomUUID(),
+				...(anonymous || !name.trim() ? {} : { displayName: name })
 			});
 			setStatusKey(result.statusKey);
 			setLocalStatus(result.status === 'unknown' ? 'unknown' : result.status === 'failed' ? 'failed' : 'accepted');
@@ -142,6 +148,27 @@ export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () 
 							</label>
 						) : null}
 					</fieldset>
+					<label className="mt-6 block">
+						<span className="text-sm font-bold">Name on donation</span>
+						<input
+							className="mt-2 w-full rounded-2xl border-2 border-line bg-card px-4 py-3 font-bold outline-none focus:border-accent disabled:opacity-50"
+							autoComplete="name"
+							maxLength={100}
+							placeholder="Optional"
+							value={anonymous ? '' : name}
+							disabled={anonymous}
+							onChange={(event) => setNameDraft(event.currentTarget.value)}
+						/>
+					</label>
+					<label className="mt-3 flex items-center gap-2 text-sm font-bold">
+						<input
+							type="checkbox"
+							className="size-4 rounded border-line text-accent focus:ring-accent"
+							checked={anonymous}
+							onChange={(event) => setAnonymous(event.currentTarget.checked)}
+						/>
+						Donate anonymously
+					</label>
 					<label className="mt-6 block">
 						<span className="text-sm font-bold">M-PESA number</span>
 						<input

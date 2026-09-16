@@ -94,11 +94,22 @@ export function mpesaConfigOrNull(env: Record<string, string | undefined> = proc
 	}
 }
 
+export const DONATE_DISPLAY_NAME_MAX = 100;
+
 export function parseDonateAmount(amount: number): number {
 	if (!Number.isInteger(amount) || amount < MPESA_MIN_AMOUNT || amount > MPESA_MAX_AMOUNT) {
 		throw new Error(`Enter a whole amount between Ksh ${MPESA_MIN_AMOUNT} and Ksh ${MPESA_MAX_AMOUNT.toLocaleString('en-KE')}.`);
 	}
 	return amount;
+}
+
+export function parseDonateDisplayName(name: string | undefined): string | undefined {
+	if (name === undefined) return undefined;
+	const trimmed = name.trim().replace(/\s+/g, ' ');
+	if (!trimmed) return undefined;
+	if (trimmed.length > DONATE_DISPLAY_NAME_MAX) throw new Error('Name is too long.');
+	if (/[\u0000-\u001f\u007f]/.test(trimmed)) throw new Error('Enter a name without special characters.');
+	return trimmed;
 }
 
 export function normalizeKenyanMsisdn(input: string): string {

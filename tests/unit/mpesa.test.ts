@@ -7,6 +7,7 @@ import {
 	mpesaTimestamp,
 	normalizeKenyanMsisdn,
 	parseDonateAmount,
+	parseDonateDisplayName,
 	parseMpesaConfig,
 	parseStkCallback,
 	stkPassword,
@@ -31,6 +32,14 @@ describe('M-PESA validation', () => {
 		expect(() => parseDonateAmount(0)).toThrow(/whole amount/i);
 		expect(() => parseDonateAmount(10.5)).toThrow(/whole amount/i);
 		expect(() => parseDonateAmount(250_001)).toThrow(/whole amount/i);
+	});
+
+	it('trims a public display name and treats blank as anonymous', () => {
+		expect(parseDonateDisplayName(undefined)).toBeUndefined();
+		expect(parseDonateDisplayName('   ')).toBeUndefined();
+		expect(parseDonateDisplayName('  Ada  Lovelace  ')).toBe('Ada Lovelace');
+		expect(() => parseDonateDisplayName('a'.repeat(101))).toThrow(/too long/i);
+		expect(() => parseDonateDisplayName('Ada\u0000Lovelace')).toThrow(/special characters/i);
 	});
 
 	it('normalizes Kenyan local and international numbers', () => {

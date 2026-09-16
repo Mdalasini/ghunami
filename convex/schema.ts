@@ -58,6 +58,7 @@ export default defineSchema({
 		phone: v.string(),
 		guestSessionId: v.string(),
 		userId: v.optional(v.id('users')),
+		displayName: v.optional(v.string()),
 		status: v.union(
 			v.literal('pending'),
 			v.literal('accepted'),

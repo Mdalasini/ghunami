@@ -163,7 +163,7 @@ export function FundDonations({
 					{donations.map((donation) => (
 						<li key={`${donation.createdAt}-${donation.amount}`} className="flex items-center justify-between gap-3">
 							<p className="text-sm font-bold">
-								A donor
+								{donation.displayName ?? 'A donor'}
 								{donation.testPayment ? <span className="ml-2 text-xs font-bold text-mute">test</span> : null}
 							</p>
 							<p className="text-sm font-extrabold">{formatGoal(donation.amount)}</p>
