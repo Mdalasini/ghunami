@@ -41,11 +41,13 @@ need ngrok in front of Convex HTTP actions.
 2. Publish a fund.
 3. Donate with a Daraja simulator number. Confirm the PIN on the phone simulator
    if your app uses one — Ghunami never collects a PIN.
-4. The public page should show a **test** donation and sandbox raised total. A sandbox label is **not** a guarantee that no money moved.
+4. The public page should show a **test** donation and sandbox raised total.
+
+Sandbox STK still moves **real money**. Safaricom automatically reverses the debit after about an hour. Ghunami does not perform that reversal.
 
 Automated tests mock Daraja and must not send real prompts.
 
-Treat any unexpected debit during sandbox testing as an unverified incident. See [mpesa-reversals.md](mpesa-reversals.md). Do not reverse production receipts from this deployment.
+See [mpesa-reversals.md](mpesa-reversals.md) for operator-initiated reversals before that window. Do not reverse production receipts from this deployment.
 
 ## Production blockers
 

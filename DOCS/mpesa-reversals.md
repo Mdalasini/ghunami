@@ -1,10 +1,10 @@
 # Sandbox reversals and collection pause
 
-Operator-initiated **full** reversals of confirmed sandbox C2B collections. Ghunami does not auto-reverse donations, does not do partial refunds, and does not pay organisers from this flow.
+Operator-initiated **full** reversals of confirmed sandbox C2B collections. Ghunami does not auto-reverse donations, does not do partial refunds, and does not pay organisers from this flow. Safaricom automatically reverses sandbox debits after about an hour.
 
-A sandbox reversal **cannot** be assumed to refund a real production debit. Do not point this deployment at production. If an unexpected debit landed on an account Ghunami does not control, contact Safaricom / the merchant — this app cannot reverse it.
+Sandbox STK still charges a real M-PESA account. A Ghunami reversal **cannot** refund a production debit. Do not point this deployment at production. If a debit landed on an account Ghunami does not control, contact Safaricom / the merchant — this app cannot reverse it.
 
-This work did **not** return any money. Automated tests mock Daraja and must never send a payment or reversal.
+Automated tests mock Daraja and must never send a payment or reversal.
 
 ## Collection kill switch
 
@@ -14,7 +14,7 @@ STK prompts stay **off** unless `MPESA_STK_ENABLED=true` on the Convex deploymen
 | --- | --- |
 | `MPESA_STK_ENABLED` | Must be exactly `true` to send new STK prompts. Unset or any other value pauses collection. |
 
-The public Donate button shows **Donation prompts are paused.** when M-PESA is configured but this flag is off. A sandbox badge is not a guarantee that no debit occurred.
+The public Donate button shows **Donation prompts are paused.** when M-PESA is configured but this flag is off.
 
 ## Reversal configuration
 
@@ -71,10 +71,6 @@ An unguessable URL or matching conversation IDs is **not** proof of Daraja origi
 ## Accounting
 
 `donationAttempts.credited` and the original receipt stay as gross payment history. `funds.sandboxRaised` / `sandboxDonationCount` (and live equivalents) are **net** after a verified reversal. Public lists and progress omit reversed rows. Late STK success cannot re-credit a reversed payment. Duplicate reversal callbacks debit once.
-
-## Reported sandbox debit
-
-Treat an apparent live transfer during sandbox testing as an **unverified financial incident**, not proof that sandbox always moves real money. Investigate with Daraja logs, the receiving PayBill, and Safaricom. Do not use this sandbox reversal API against production receipts.
 
 ## Tests
 

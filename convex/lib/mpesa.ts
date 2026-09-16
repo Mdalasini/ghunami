@@ -337,7 +337,10 @@ export function donateStatusCopy(status: DonateUiStatus): { title: string; body:
 				body: 'The prompt may still be on your phone. We have not marked this as failed. Check M-PESA, then watch this page.'
 			};
 		case 'succeeded':
-			return { title: 'Thank you', body: 'Your test payment was received.' };
+			return {
+				title: 'Thank you',
+				body: 'Your test payment was received. The sandbox debit is reversed after an hour.'
+			};
 		case 'cancelled':
 			return { title: 'Payment cancelled', body: 'The prompt was cancelled. You can try again.' };
 		case 'failed':

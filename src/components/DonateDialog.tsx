@@ -87,7 +87,7 @@ export function DonateDialog({ fundID, onClose }: { fundID: string; onClose: () 
 			onOpen={(panel) => (panel.querySelector('button, input') as HTMLElement | null)?.focus()}
 		>
 			<p className="mt-2 rounded-xl bg-sun/80 px-3 py-2 text-xs font-bold text-mute">
-				Test payment · M-PESA sandbox. No real money is collected.
+				Test payment · M-PESA sandbox. Real money is charged and reversed after an hour.
 			</p>
 			{status === 'form' ? (
 				<form className="mt-5" onSubmit={(event) => void submit(event)}>
