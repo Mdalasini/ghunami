@@ -8,7 +8,7 @@ The Authorization API generates access tokens required for authenticating API ca
 - Token Expiry: 3600 seconds
 - Supports Automated Testing via the Simulator
 - Simulator: Developers can automatically generate tokens by selecting an app in the simulator section, where keys auto-populate.
-- Postman Collection: Developers can also obtain their Consumer Key and Consumer Secret from the Daraja [My Apps](#) page and use them for manual authentication.
+- Postman Collection: Developers can also obtain their Consumer Key and Consumer Secret from the Daraja [My Apps](https://developer.safaricom.co.ke/dashboard/myapps) page and use them for manual authentication.
 
   **Note:** This API must be called before any other API in the Daraja platform, as all other APIs require an access token for authentication.
 
@@ -23,9 +23,9 @@ The Authorization API generates access tokens required for authenticating API ca
 
 ## Prerequisites
 
-- Create a Daraja Account on [Safaricom Developer Portal](#).
+- Create a Daraja Account on [Safaricom Developer Portal](https://developer.safaricom.co.ke/).
 - Create an sandbox app in the portal to get API credentials.
-- Retrieve Consumer Key & Consumer Secret from your sandbox app on [My Apps](#).
+- Retrieve Consumer Key & Consumer Secret from your sandbox app on [My Apps](https://developer.safaricom.co.ke/dashboard/myapps).
 
 ## Good to Know
 
@@ -121,5 +121,5 @@ Developers can get instant responses using the Daraja Chatbot for both developme
 
 For production support and incident management, use:
 
-- Incident Management Page: Visit the [Incident Management](#) page.
+- Incident Management Page: Visit the [Incident Management](https://developer.safaricom.co.ke/dashboard/incidentmanagement) page.
 - Email: Reach out to API support at [apisupport@safaricom.co.ke](mailto:apisupport@safaricom.co.ke).
