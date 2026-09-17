@@ -56,8 +56,8 @@ password
 }
 
 // PARAMS
-grant_type;
-client_credentials;
+grant_type
+client_credentials
 ```
 
 ### Request Parameter Definition
