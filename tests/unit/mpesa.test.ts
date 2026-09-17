@@ -22,6 +22,7 @@ const env = {
 	MPESA_SHORTCODE: '174379',
 	MPESA_PASSKEY: 'passkey',
 	MPESA_TRANSACTION_TYPE: 'CustomerPayBillOnline',
+	MPESA_STK_ENABLED: 'true',
 	CONVEX_SITE_URL: 'https://test.convex.site'
 };
 
@@ -83,6 +84,8 @@ describe('M-PESA validation', () => {
 			/CustomerPayBillOnline/
 		);
 		expect(() => parseMpesaConfig({ ...env, CONVEX_SITE_URL: 'http://localhost:3210' })).toThrow(/https/);
+		expect(() => parseMpesaConfig({ ...env, MPESA_STK_ENABLED: undefined })).toThrow(/paused/);
+		expect(() => parseMpesaConfig({ ...env, MPESA_STK_ENABLED: 'false' })).toThrow(/paused/);
 	});
 
 	it('parses success and cancellation callbacks, including missing failure metadata', () => {

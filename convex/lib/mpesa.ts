@@ -73,6 +73,9 @@ export function parseMpesaConfig(env: Record<string, string | undefined> = proce
 	if (!/^https:\/\//i.test(siteUrl)) {
 		throw new Error('CONVEX_SITE_URL must be an https URL for the M-PESA callback.');
 	}
+	if (env.MPESA_STK_ENABLED?.trim() !== 'true') {
+		throw new Error('M-PESA collection is paused.');
+	}
 
 	return {
 		environment,

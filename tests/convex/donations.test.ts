@@ -35,6 +35,7 @@ const envNames = [
 	'MPESA_SHORTCODE',
 	'MPESA_PASSKEY',
 	'MPESA_TRANSACTION_TYPE',
+	'MPESA_STK_ENABLED',
 	'CONVEX_SITE_URL'
 ] as const;
 
@@ -47,6 +48,7 @@ function setSandboxEnv() {
 	process.env.MPESA_SHORTCODE = '174379';
 	process.env.MPESA_PASSKEY = 'test-passkey';
 	process.env.MPESA_TRANSACTION_TYPE = 'CustomerPayBillOnline';
+	process.env.MPESA_STK_ENABLED = 'true';
 	process.env.CONVEX_SITE_URL = 'https://test.convex.site';
 }
 
@@ -128,6 +130,25 @@ describe('sandbox donations', () => {
 		vi.unstubAllGlobals();
 		vi.restoreAllMocks();
 		for (const name of envNames) restoreEnv(name, previous[name]);
+	});
+
+	it('pauses collection when MPESA_STK_ENABLED is not true', async () => {
+		delete process.env.MPESA_STK_ENABLED;
+		const t = harness();
+		const { fundID } = await liveFund(t);
+		const fetch = vi.fn();
+		vi.stubGlobal('fetch', fetch);
+		expect(await t.query(api.donations.publicConfig)).toMatchObject({ donateEnabled: false });
+		await expect(
+			t.action(api.donations.initiate, {
+				fundID,
+				amount: 100,
+				phone,
+				guestSessionId: guest,
+				idempotencyKey: 'donate-paused-aaaaaa'
+			})
+		).rejects.toThrow(/paused/);
+		expect(fetch).not.toHaveBeenCalled();
 	});
 
 	it('rejects drafts and does not credit on accepted STK', async () => {
