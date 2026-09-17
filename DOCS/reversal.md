@@ -26,7 +26,7 @@ The Reversals API enables the reversal of Customer-to-Business (C2B) transaction
 
 ## Good to Know
 
-This API is asynchronous. This API is used to check the status of a customer to business, business to business, Business to customer, Reversal and IMT transactions that happen on M-PESA.
+This endpoint processes reversals asynchronously. It does not report transaction status. To check C2B, B2B, B2C, reversal, or IMT status, use the Transaction Status API (`POST https://sandbox.safaricom.co.ke/mpesa/transactionstatus/v1/query`).
 
 ## Authentication
 
