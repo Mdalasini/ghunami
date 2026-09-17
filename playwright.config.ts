@@ -9,6 +9,9 @@ function isolatedEnv(): Record<string, string> {
 	delete env.WORKOS_CLIENT_ID;
 	delete env.CONVEX_DEPLOY_KEY;
 	delete env.CONVEX_DEPLOYMENT;
+	delete env.MPESA_CONSUMER_KEY;
+	delete env.MPESA_CONSUMER_SECRET;
+	delete env.MPESA_PASSKEY;
 	return {
 		...Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
 		GHUNAMI_ISOLATED_TEST: '1',
@@ -18,6 +21,8 @@ function isolatedEnv(): Record<string, string> {
 		HOST: '127.0.0.1'
 	};
 }
+
+process.env.SESSION_SECRET ??= 'ghunami-test-only-session-key-do-not-use!';
 
 export default defineConfig({
 	testDir: './tests/e2e',

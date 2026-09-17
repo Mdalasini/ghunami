@@ -9,11 +9,13 @@
  */
 
 import type * as authFlow from "../authFlow.js";
+import type * as donations from "../donations.js";
 import type * as funds from "../funds.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_fundFields from "../lib/fundFields.js";
 import type * as lib_fundId from "../lib/fundId.js";
+import type * as lib_mpesa from "../lib/mpesa.js";
 import type * as lib_richText from "../lib/richText.js";
 import type * as users from "../users.js";
 
@@ -25,11 +27,13 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   authFlow: typeof authFlow;
+  donations: typeof donations;
   funds: typeof funds;
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/fundFields": typeof lib_fundFields;
   "lib/fundId": typeof lib_fundId;
+  "lib/mpesa": typeof lib_mpesa;
   "lib/richText": typeof lib_richText;
   users: typeof users;
 }>;

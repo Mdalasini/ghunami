@@ -6,7 +6,7 @@ import { isFundID } from '../../convex/lib/fundId';
 import { AuthGate } from '../components/AuthGate';
 import { SiteHeader } from '../components/BrandLink';
 import { EditFundDialog, type EditField } from '../components/EditFundDialog';
-import { FundActions, FundCover, FundDonations, FundProgress, FundStory } from '../components/FundView';
+import { FundActions, FundCover, FundDonations, FundProgress, FundStory, useFundSupport } from '../components/FundView';
 import { Modal } from '../components/Modal';
 import { fundPath } from '../lib/fundUrl';
 import { coverMediaUrl } from '../lib/media';
@@ -144,9 +144,13 @@ export default function FundPreview() {
 	const valid = isFundID(fundID);
 	const fund = useQuery(api.funds.getPreview, valid ? { fundID } : 'skip');
 	const live = fund?.status === 'live';
-	const footnote = live
-		? 'Donations coming soon.'
-		: 'Sharing opens when you set this fund live. Donations aren’t available yet.';
+	const support = useFundSupport(valid ? fundID : null);
+	const donateEnabled = Boolean(live && support.donateEnabled);
+	const footnote = !live
+		? 'Sharing opens when you set this fund live. Donations aren’t available yet.'
+		: donateEnabled
+			? 'Test payments via M-PESA sandbox. Real money is charged and reversed after an hour. Donations collect to Ghunami’s PayBill.'
+			: 'Donations aren’t available yet.';
 
 	return (
 		<AuthGate>
@@ -176,6 +180,7 @@ export default function FundPreview() {
 								This fund is live. Edits you make here change the public page.
 							</p>
 						) : null}
+						{support.donateDialog}
 						<main className="slide-forward mx-auto w-full max-w-6xl flex-1 px-6 pt-8 pb-64 md:pt-12 lg:pb-20">
 							<div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-12">
 								<article className="min-w-0">
@@ -219,10 +224,23 @@ export default function FundPreview() {
 												Edit goal
 											</EditControl>
 										</div>
-										<FundProgress goal={fund.goal} />
-										<FundActions footnote={footnote} />
+										<FundProgress
+											goal={fund.goal}
+											raised={support.raised}
+											donationCount={support.donationCount}
+											testPayments={support.testPayments}
+										/>
+										<FundActions
+											footnote={footnote}
+											donateEnabled={donateEnabled}
+											onDonate={support.openDonate}
+										/>
 									</div>
-									<FundDonations className="lg:mt-6 lg:border-t lg:border-line lg:pt-6" />
+									<FundDonations
+										className="lg:mt-6 lg:border-t lg:border-line lg:pt-6"
+										count={support.donationCount}
+										donations={support.donations}
+									/>
 								</aside>
 							</div>
 						</main>
@@ -234,8 +252,18 @@ export default function FundPreview() {
 										Edit goal
 									</EditControl>
 								</div>
-								<FundProgress goal={fund.goal} compact />
-								<FundActions footnote={footnote} />
+								<FundProgress
+									goal={fund.goal}
+									raised={support.raised}
+									donationCount={support.donationCount}
+									testPayments={support.testPayments}
+									compact
+								/>
+								<FundActions
+									footnote={footnote}
+									donateEnabled={donateEnabled}
+									onDonate={support.openDonate}
+								/>
 							</div>
 						</div>
 					</>

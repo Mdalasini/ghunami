@@ -8,7 +8,10 @@ const blocked = [
 	'WORKOS_API_KEY',
 	'WORKOS_CLIENT_ID',
 	'CONVEX_DEPLOY_KEY',
-	'CONVEX_DEPLOYMENT'
+	'CONVEX_DEPLOYMENT',
+	'MPESA_CONSUMER_KEY',
+	'MPESA_CONSUMER_SECRET',
+	'MPESA_PASSKEY'
 ] as const;
 
 for (const key of blocked) {
