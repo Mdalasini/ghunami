@@ -345,7 +345,7 @@ The Business manager approves transactions, checks balances, and accesses statem
 4. It will take you to a new page where you will enter the username of the API initiator.
 5. Select access channel as API.
 6. Then select web profile default rule profile.
-7. Then assign role... look for the ORG B2C API initiator, Balance Query ORG API, Transaction Status query ORG API roles.
+7. Then assign role... look for the ORG B2C API initiator, Balance Query ORG API, Transaction Status query ORG API, and Org Reversal Initiator roles.
 8. Enter the KYC information of the operator then submit.
 
 **Here is how to set the password for the API user:**
