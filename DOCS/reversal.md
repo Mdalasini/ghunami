@@ -412,7 +412,7 @@ For production support and incident management, use:
 - What is the process of creating an Initiator?
   - Create a Business Manager, then an API operator, and set the API user's password.
 - How do I generate Security Credential?
-  - Encrypt the base64 encoded initiator password with M-Pesa’s public key certificate using RSA and PKCS #1.5 padding.
+  - Use the `SecurityCredential` generated in Daraja's **Reversal Test Credentials**; do not download the certificate or encrypt the initiator password locally.
 - What is a short code?
   - Unique number allocated to a pay bill or buy goods organization for receiving payments.
 - How will I log in to the M-PESA portal?
