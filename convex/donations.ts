@@ -59,6 +59,7 @@ const publicStatus = v.object({
 });
 
 const donationItem = v.object({
+	_id: v.id('donationAttempts'),
 	amount: v.number(),
 	createdAt: v.number(),
 	displayName: v.union(v.string(), v.null()),
@@ -188,6 +189,7 @@ export const listDonations = query({
 			.paginate(args.paginationOpts);
 		return {
 			page: result.page.map((row) => ({
+				_id: row._id,
 				amount: row.amount,
 				createdAt: row.createdAt,
 				displayName: row.displayName ?? null,

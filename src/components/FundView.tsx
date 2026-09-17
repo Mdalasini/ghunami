@@ -136,7 +136,7 @@ export function FundDonations({
 }: {
 	className?: string;
 	count?: number;
-	donations?: Array<{ amount: number; createdAt: number; displayName: string | null; testPayment: boolean }>;
+	donations?: Array<{ _id: string; amount: number; createdAt: number; displayName: string | null; testPayment: boolean }>;
 }) {
 	return (
 		<section className={className} aria-labelledby="donations-heading">
@@ -161,7 +161,7 @@ export function FundDonations({
 			) : (
 				<ul className="mt-4 space-y-3">
 					{donations.map((donation) => (
-						<li key={`${donation.createdAt}-${donation.amount}`} className="flex items-center justify-between gap-3">
+						<li key={donation._id} className="flex items-center justify-between gap-3">
 							<p className="text-sm font-bold">
 								{donation.displayName ?? 'A donor'}
 								{donation.testPayment ? <span className="ml-2 text-xs font-bold text-mute">test</span> : null}

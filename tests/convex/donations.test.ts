@@ -238,7 +238,7 @@ describe('sandbox donations', () => {
 			paginationOpts: { numItems: 10, cursor: null }
 		});
 		expect(list.page).toEqual([
-			expect.objectContaining({ amount: 100, testPayment: true, displayName: null })
+			expect.objectContaining({ amount: 100, testPayment: true, displayName: null, _id: expect.any(String) })
 		]);
 		expect(JSON.stringify(list)).not.toMatch(/254712345678|callbackKey|statusKey/);
 	});
