@@ -22,7 +22,7 @@ The Reversals API enables the reversal of Customer-to-Business (C2B) transaction
 - Create a sandbox app to get API credentials.
 - Retrieve Consumer Key & Consumer Secret from your sandbox app on [My Apps](https://developer.safaricom.co.ke).
 - Test data is available in the simulator section.
-- For production, ensure you have a live pay bill/till number with Business Admin/Manager operators created.
+- Ghunami is sandbox-only: do not attach a live PayBill/Till. Production M-PESA is rejected until callback authentication exists.
 
 ## Good to Know
 
@@ -240,8 +240,8 @@ Create a new test app under apps on the main nerve bar, select Reversal app prod
 Use the credentials to generate access token using the below endpoint.
 
 - Sandbox: [https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials](https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials)
-- Production: [https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials](https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials)
-- Initiate a transaction using the request body above.
+- Production OAuth is unsupported here. Ghunami rejects `MPESA_ENVIRONMENT=production`.
+- Initiate a reversal using the request body above against the sandbox endpoint.
 
 **Note:** The Postman collection can only be accessed when logged in. Please log in to your Daraja account to access the collection.
 
@@ -249,11 +249,16 @@ Click the button named "Use API" to access the Postman collection with pre-built
 
 Download the Postman collection and replace parameters with your credentials.
 
-## Go Live
+## Sandbox only
 
-Attach the integration to a live pay bill/till number. Navigate to the GO LIVE tab. Fill in the fields with live data. A short code of a live pay bill or till number, the organization name, and an M-PESA admin/manager username are required to successfully go live.
+Do not attach Ghunami to a live PayBill/Till or use Daraja Go Live. `MPESA_ENVIRONMENT=production` is rejected, and production must stay disabled until Daraja callbacks can be authenticated (Convex HTTP actions cannot trust connecting IP or `X-Forwarded-For`).
 
-Upon successful go live, production endpoints will be sent to developer email and the test sandbox app will be moved to production with production consumer key and secrets.
+Supported flow:
+
+1. Keep a sandbox Daraja app and sandbox shortcode.
+2. Set `MPESA_ENVIRONMENT=sandbox` on the Convex **development** deployment. See [mpesa-sandbox.md](mpesa-sandbox.md).
+3. Call the sandbox reversal endpoint above. Sandbox STK still moves real money; Safaricom auto-reverses the debit after about an hour. Use this API only for operator-initiated reversals before that window.
+4. Treat raised totals as test progress, not a withdrawable balance. Payouts are out of scope.
 
 # How To
 
